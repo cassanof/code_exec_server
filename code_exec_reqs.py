@@ -15,11 +15,14 @@ def exec_test(server, code, test):
             server + "/py_exec",
             data=encoded,
             timeout=timeout)
-        assert r.text == "0" or r.text == "1"
-        return r.text == "0"
+        lines = r.text.split("\n")
+        resp = lines[0]
+        err = "\n".join(lines[1:])
+        assert resp == "0" or resp == "1"
+        return r.text == "0", err
     except Exception as e:
         print(e)
-        return False
+        return False, "Failed to execute program"
 
 
 def run_coverage(server, code, tests):
