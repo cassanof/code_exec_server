@@ -2,14 +2,13 @@ import requests
 import base64
 
 
-def exec_test(server, code, test):
+def exec_test(server, code, test, timeout=10):
     """
     Executes a test against a code snippet.
     Produces true if the test passes, false otherwise.
     """
     code_with_tests = code + "\n\n" + test
     encoded = base64.b64encode(bytes(code_with_tests, "utf-8"))
-    timeout = 10  # 5 for test exec, 5 for safety
     try:
         r = requests.post(
             server + "/py_exec",
