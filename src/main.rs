@@ -66,6 +66,7 @@ async fn run_program_with_timeout(
         }
     }
 }
+
 async fn run_code(code: &str) -> (String, String) {
     let tempfile = create_temp_file().await;
     tokio::fs::write(&tempfile, code).await.unwrap();
@@ -74,7 +75,7 @@ async fn run_code(code: &str) -> (String, String) {
         run_program_with_timeout("python3", &[tempfile.as_str()], Duration::from_secs(5)).await;
 
     let res = match output.as_ref().map(|o| o.status.code().unwrap_or(-1)) {
-        Some(0) => "0".to_string(),
+        Some(0) => format!("0\n{}", String::from_utf8_lossy(&output.unwrap().stdout)),
         Some(-1) => "1\nTimeout".to_string(),
         _ => format!("1\n{}", String::from_utf8_lossy(&output.unwrap().stderr)),
     };
