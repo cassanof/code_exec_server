@@ -18,3 +18,18 @@ print(pass_req)
 
 fail_req = code_exec_reqs.exec_test("http://127.0.0.1:8000", CODE_FAIL, "")
 print(fail_req)
+
+
+# batched
+codes = [
+    CODE_PASS,
+    CODE_FAIL,
+    CODE_PASS,
+    CODE_FAIL,
+    CODE_PASS,
+]
+tests = ["" for _ in range(len(codes))]
+batched_req = code_exec_reqs.exec_test_batched(
+    "http://127.0.0.1:8000", codes, tests)
+print(batched_req)
+assert len(batched_req) == len(codes)
