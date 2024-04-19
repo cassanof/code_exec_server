@@ -77,7 +77,12 @@ async fn run_code(code: &str) -> (String, String) {
     let res = match output.as_ref().map(|o| o.status.code().unwrap_or(-1)) {
         Some(0) => format!("0\n{}", String::from_utf8_lossy(&output.unwrap().stdout)),
         Some(-1) => "1\nTimeout".to_string(),
-        _ => format!("1\n{}", String::from_utf8_lossy(&output.unwrap().stderr)),
+        _ => format!(
+            "1\n{}",
+            output
+                .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
+                .unwrap_or_default(),
+        ),
     };
 
     println!("{}: {}", tempfile, res);
