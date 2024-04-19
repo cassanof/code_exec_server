@@ -23,7 +23,7 @@ def exec_test(server, code, test, timeout=10) -> Tuple[bool, str]:
         resp = lines[0]
         outs = "\n".join(lines[1:])
         assert resp == "0" or resp == "1"
-        return r.text == "0", outs
+        return resp == "0", outs
     except Exception as e:
         print(e)
         return False, "Failed to execute program"
