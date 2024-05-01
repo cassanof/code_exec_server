@@ -20,6 +20,8 @@ async fn main() {
 
 lazy_static! {
     static ref FILE_IDX: AtomicUsize = AtomicUsize::new(0);
+    static ref CPU_SEMAPHORE: tokio::sync::Semaphore =
+        tokio::sync::Semaphore::new(std::thread::available_parallelism().unwrap().into());
 }
 
 async fn create_temp_file() -> String {
@@ -38,6 +40,7 @@ async fn run_program_with_timeout(
     args: &[&str],
     timeout: Duration,
 ) -> Option<Output> {
+    let _permit = CPU_SEMAPHORE.acquire().await.unwrap();
     let child = tokio::process::Command::new(program)
         .args(args)
         .stdout(std::process::Stdio::piped())
@@ -72,7 +75,7 @@ async fn run_code(code: &str) -> (String, String) {
     tokio::fs::write(&tempfile, code).await.unwrap();
     // check for timeout
     let output =
-        run_program_with_timeout("python3", &[tempfile.as_str()], Duration::from_secs(5)).await;
+        run_program_with_timeout("python3", &[tempfile.as_str()], Duration::from_secs(25)).await;
 
     let res = match output.as_ref().map(|o| o.status.code().unwrap_or(-1)) {
         Some(0) => format!("0\n{}", String::from_utf8_lossy(&output.unwrap().stdout)),
