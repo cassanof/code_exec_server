@@ -4,7 +4,7 @@ import base64
 import threading
 
 
-def exec_test(server, code, test, timeout=10) -> Tuple[bool, str]:
+def exec_test(server, code, test, timeout=30) -> Tuple[bool, str]:
     """
     Executes a test against a code snippet.
     Produces true if the test passes, false otherwise.
@@ -30,7 +30,7 @@ def exec_test(server, code, test, timeout=10) -> Tuple[bool, str]:
         return False, "Failed to execute program"
 
 
-def exec_test_batched(server, codes, tests, timeout=10) -> List[Tuple[bool, str]]:
+def exec_test_batched(server, codes, tests, timeout=30) -> List[Tuple[bool, str]]:
     """
     Executes a batch of tests against a batch of code snippets using threading.
     """
