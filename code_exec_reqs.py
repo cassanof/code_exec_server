@@ -30,15 +30,52 @@ def exec_test(server, code, test, timeout=30) -> Tuple[bool, str]:
         return False, "Failed to execute program"
 
 
-def exec_test_batched(server, codes, tests, timeout=30) -> List[Tuple[bool, str]]:
+def exec_test_multipl_e(server, code, test, lang, timeout=30) -> Tuple[bool, str]:
+    code_with_tests = code + "\n\n" + test
+    data = json.dumps({"code": code_with_tests, "lang": lang})
+    try:
+        r = requests.post(
+            server + "/any_exec",
+            data=data,
+            timeout=timeout)
+        lines = r.text.split("\n")
+        resp = lines[0]
+        outs = "\n".join(lines[1:])
+        assert resp == "0" or resp == "1"
+        if outs.strip() == "Timeout":
+            return False, "Timeout"
+        # parse json
+        try:
+            outs = json.loads(outs)
+        except Exception as e:
+            return False, "Failed to parse output: " + str(e)
+
+        # get real status code
+        resp = outs["exit_code"]
+        outs = outs["stdout"] if resp == 0 else outs["stderr"]
+        return resp == 0, outs
+    except Exception as e:
+        print(e)
+        return False, "Failed to execute program"
+
+
+def exec_test_batched(server, codes, tests, lang=None, timeout=30) -> List[Tuple[bool, str]]:
     """
     Executes a batch of tests against a batch of code snippets using threading.
+
+    Lang defaults to python if not provided.
     """
     threads = []
     results: List[Optional[Tuple[bool, str]]] = [None] * len(codes)
 
+    if lang:
+        def exec_fn(code, test): return exec_test_multipl_e(
+            server, code, test, lang, timeout)
+    else:
+        def exec_fn(code, test): return exec_test(server, code, test, timeout)
+
     def exec_test_threaded(i, code, test):
-        results[i] = exec_test(server, code, test, timeout)
+        results[i] = exec_fn(code, test)
 
     for i, (code, test) in enumerate(zip(codes, tests)):
         t = threading.Thread(target=exec_test_threaded, args=(i, code, test))

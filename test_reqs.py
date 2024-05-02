@@ -19,6 +19,16 @@ print(pass_req)
 fail_req = code_exec_reqs.exec_test("http://127.0.0.1:8000", CODE_FAIL, "")
 print(fail_req)
 
+pass_req = code_exec_reqs.exec_test_multipl_e(
+    "http://127.0.0.1:8000", CODE_PASS, "", "python"
+)
+print(pass_req)
+
+fail_req = code_exec_reqs.exec_test_multipl_e(
+    "http://127.0.0.1:8000", CODE_FAIL,  "", "python"
+)
+print(fail_req)
+
 
 # batched
 codes = [
