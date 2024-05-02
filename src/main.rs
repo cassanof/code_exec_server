@@ -9,7 +9,8 @@ use std::{
 #[tokio::main]
 async fn main() {
     let app = Router::new()
-        .route("/py_exec", post(resp))
+        .route("/py_exec", post(py_exec))
+        .route("/any_exec", post(py_exec))
         .route("/py_coverage", post(coverage));
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
@@ -92,8 +93,21 @@ async fn run_code(code: &str) -> (String, String) {
     (res, tempfile)
 }
 
-async fn coverage(code: String) -> String {
-    let code = String::from_utf8_lossy(&base64::decode(code).unwrap()).to_string();
+/// hacky but i'm lazy
+fn get_string_json(json: String, key: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(&json)
+        .map(|v| {
+            v.get(key)
+                .unwrap_or(&serde_json::Value::Null)
+                .as_str()
+                .unwrap_or("")
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+async fn coverage(json: String) -> String {
+    let code = get_string_json(json, "code");
     let tempfile = create_temp_file().await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     let cov_file = format!("{}.cov", tempfile);
@@ -142,8 +156,8 @@ async fn coverage(code: String) -> String {
     res
 }
 
-async fn resp(code: String) -> String {
-    let code = String::from_utf8_lossy(&base64::decode(code).unwrap()).to_string();
+async fn py_exec(json: String) -> String {
+    let code = get_string_json(json, "code");
     let (res, tempfile) = run_code(&code).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res

@@ -1,0 +1,3 @@
+[submodule "MultiPL-E"]
+	path = MultiPL-E
+	url = git@github.com:nuprl/MultiPL-E
