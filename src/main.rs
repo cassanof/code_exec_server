@@ -27,14 +27,14 @@ lazy_static! {
         std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
 }
 
-async fn create_temp_file() -> String {
+async fn create_temp_file(ext: &str) -> String {
     let idx = FILE_IDX.fetch_add(1, Ordering::SeqCst);
     // temp dir
     let temp_dir = std::env::temp_dir().join("codeexec");
     if !temp_dir.exists() {
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
     }
-    let filename = format!("{}/{}.py", temp_dir.to_string_lossy(), idx);
+    let filename = format!("{}/{}.{}", temp_dir.to_string_lossy(), idx, ext);
     filename
 }
 
@@ -87,7 +87,7 @@ fn out_to_res(output: Option<Output>) -> String {
 }
 
 async fn run_py_code(code: &str) -> (String, String) {
-    let tempfile = create_temp_file().await;
+    let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     // check for timeout
     let output =
@@ -100,7 +100,7 @@ async fn run_py_code(code: &str) -> (String, String) {
 }
 
 async fn run_multipl_e_prog(code: &str, lang: &str) -> (String, String) {
-    let tempfile = create_temp_file().await;
+    let tempfile = create_temp_file(lang).await;
     tokio::fs::write(&tempfile, code).await.unwrap();
 
     // method:
@@ -138,7 +138,7 @@ fn get_string_json(json: &str, key: &str) -> String {
 
 async fn coverage(json: String) -> String {
     let code = get_string_json(&json, "code");
-    let tempfile = create_temp_file().await;
+    let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     let cov_file = format!("{}.cov", tempfile);
     let thunk = async {
