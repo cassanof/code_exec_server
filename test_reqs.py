@@ -85,3 +85,19 @@ fail_req = code_exec_reqs.exec_test_multipl_e(
 )
 
 print(fail_req)
+
+print("###### Testing batched pass/fail cases with TypeScript ######")
+
+# batched
+codes = [
+    CODE_TS_PASS,
+    CODE_TS_FAIL,
+    CODE_TS_PASS,
+    CODE_TS_FAIL,
+    CODE_TS_PASS,
+]
+
+tests = ["" for _ in range(len(codes))]
+batched_req = code_exec_reqs.exec_test_batched(
+    "http://127.0.0.1:8000", codes, tests, "ts")
+print(batched_req)
