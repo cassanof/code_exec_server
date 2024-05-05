@@ -85,8 +85,14 @@ def exec_test_batched(server, codes, tests, lang=None, timeout=30) -> List[Tuple
     for t in threads:
         t.join()
 
-    assert all(r is not None for r in results)
-    return results
+    results_new = []
+    for r in results:
+        if r is None:
+            results_new.append((False, "Failed to execute program"))
+        else:
+            results_new.append(r)
+
+    return results_new
 
 
 def run_coverage(server, code, tests):
