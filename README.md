@@ -4,19 +4,23 @@ Runs a dockerized server that allows you to execute Python code via HTTP request
 All the Python code executions will run concurrently; the server will not block any requests.
 This means that the server will not wait for the execution of the Python code to finish before accepting new requests.
 
+**Make sure to init the submodules before running the server:** `git submodule update --init --recursive`
+
 ## Running the Server
 
 To run the server, you need to have Docker installed on your machine (preferably with the [gVisor runtime](https://gvisor.dev/docs/) for security reasons).
 Then, you can just use the `./build_and_run.sh` script to build the container
 and run the server on your machine.
+Alternatively, you can use `./pull_and_run.sh` to pull the container from Docker Hub instead of building it.
 
 If you are feeling dangerous, you can also just run the server
-directly with `./run.sh`. You'll need rust installed on your machine to compile the server along 
+directly with `./run.sh`. You'll need rust installed on your machine to compile the server along
 with whatever runtime the language of the code you want to execute requires.
 
 ### Calling the Server
 
 We provide a simple Python library to interact with the server, which you can find in the `./code_exec_reqs.py` file.
+The server runs on port `8000`, so you can call it from `http://127.0.0.1:8000`.
 
 You can also use whatever http client to interact with the server. There are three endpoints:
 
