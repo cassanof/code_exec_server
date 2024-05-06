@@ -11,7 +11,8 @@ Then, you can just use the `./build_and_run.sh` script to build the container
 and run the server on your machine.
 
 If you are feeling dangerous, you can also just run the server
-directly with `./run.sh`. You'll need rust installed on your machine to compile the server.
+directly with `./run.sh`. You'll need rust installed on your machine to compile the server along 
+with whatever runtime the language of the code you want to execute requires.
 
 ### Calling the Server
 
