@@ -64,7 +64,7 @@ def exec_test_multipl_e(server, code, test, lang, timeout=30, timeout_on_client=
         return False, "Failed to execute program"
 
 
-def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_client=False) -> List[Tuple[bool, str]]:
+def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_client=False, stdins=None) -> List[Tuple[bool, str]]:
     """
     Executes a batch of tests against a batch of code snippets using threading.
 
@@ -73,18 +73,21 @@ def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_cl
     threads = []
     results: List[Optional[Tuple[bool, str]]] = [None] * len(codes)
 
-    if lang:
-        def exec_fn(code, test): return exec_test_multipl_e(
+    if lang and lang != "python":
+        assert stdins is None, "stdins are not supported for non-python languages for now"
+        def exec_fn(code, test, _): return exec_test_multipl_e(
             server, code, test, lang, timeout, timeout_on_client)
     else:
-        def exec_fn(code, test): return exec_test(
-            server, code, test, timeout, timeout_on_client)
+        def exec_fn(code, test, stdin): return exec_test(
+            server, code, test, timeout, timeout_on_client, stdin=stdin)
 
-    def exec_test_threaded(i, code, test):
-        results[i] = exec_fn(code, test)
+    def exec_test_threaded(i, code, test, stdin):
+        results[i] = exec_fn(code, test, stdin)
 
-    for i, (code, test) in enumerate(zip(codes, tests)):
-        t = threading.Thread(target=exec_test_threaded, args=(i, code, test))
+    stdins = stdins or [None] * len(codes)
+
+    for i, (code, test, stdin) in enumerate(zip(codes, tests, stdins)):
+        t = threading.Thread(target=exec_test_threaded, args=(i, code, test, stdin))
         threads.append(t)
         t.start()
 
