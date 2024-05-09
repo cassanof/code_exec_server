@@ -140,9 +140,20 @@ fn get_string_json(json: &str, key: &str) -> String {
         .unwrap_or_default()
 }
 
+fn get_int_json(json: &str, key: &str) -> i64 {
+    serde_json::from_str::<serde_json::Value>(json)
+        .map(|v| {
+            v.get(key)
+                .unwrap_or(&serde_json::Value::Null)
+                .as_i64()
+                .unwrap_or(0)
+        })
+        .unwrap_or(0)
+}
+
 async fn coverage(json: String) -> String {
     let code = get_string_json(&json, "code");
-    let timeout: u64 = get_string_json(&json, "timeout").parse().unwrap_or(25);
+    let timeout: u64 = get_int_json(&json, "timeout") as u64;
     let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     let cov_file = format!("{}.cov", tempfile);
@@ -193,7 +204,7 @@ async fn coverage(json: String) -> String {
 
 async fn py_exec(json: String) -> String {
     let code = get_string_json(&json, "code");
-    let timeout: u64 = get_string_json(&json, "timeout").parse().unwrap_or(25);
+    let timeout: u64 = get_int_json(&json, "timeout") as u64;
     let (res, tempfile) = run_py_code(&code, timeout).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
@@ -202,7 +213,7 @@ async fn py_exec(json: String) -> String {
 async fn any_exec(json: String) -> String {
     let code = get_string_json(&json, "code");
     let lang = get_string_json(&json, "lang");
-    let timeout: u64 = get_string_json(&json, "timeout").parse().unwrap_or(25);
+    let timeout: u64 = get_int_json(&json, "timeout") as u64;
     let (res, tempfile) = run_multipl_e_prog(&code, &lang, timeout).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res

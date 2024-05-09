@@ -101,3 +101,19 @@ tests = ["" for _ in range(len(codes))]
 batched_req = code_exec_reqs.exec_test_batched(
     "http://127.0.0.1:8000", codes, tests, "ts")
 print(batched_req)
+
+
+
+print("###### Testing timeout case with Python ######")
+# timeout on python
+CODE_TIMEOUT = """
+while True:
+    pass
+"""
+import time
+time_now = time.time()
+timeout_req = code_exec_reqs.exec_test(
+    "http://127.0.0.1:8000", CODE_TIMEOUT, "", timeout=5)
+time_after = time.time()
+print("Time elapsed (seconds):", time_after - time_now)
+print(timeout_req)
