@@ -86,12 +86,16 @@ fn out_to_res(output: Option<Output>) -> String {
     }
 }
 
-async fn run_py_code(code: &str) -> (String, String) {
+async fn run_py_code(code: &str, timeout: u64) -> (String, String) {
     let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     // check for timeout
-    let output =
-        run_program_with_timeout("python3", &[tempfile.as_str()], Duration::from_secs(25)).await;
+    let output = run_program_with_timeout(
+        "python3",
+        &[tempfile.as_str()],
+        Duration::from_secs(timeout),
+    )
+    .await;
 
     let res = out_to_res(output);
 
@@ -99,7 +103,7 @@ async fn run_py_code(code: &str) -> (String, String) {
     (res, tempfile)
 }
 
-async fn run_multipl_e_prog(code: &str, lang: &str) -> (String, String) {
+async fn run_multipl_e_prog(code: &str, lang: &str, timeout: u64) -> (String, String) {
     let tempfile = create_temp_file(lang).await;
     tokio::fs::write(&tempfile, code).await.unwrap();
 
@@ -115,7 +119,7 @@ async fn run_multipl_e_prog(code: &str, lang: &str) -> (String, String) {
                 *CRATE_DIR, lang, lang, tempfile
             ),
         ],
-        Duration::from_secs(25),
+        Duration::from_secs(timeout),
     ).await;
     let res = out_to_res(output);
 
@@ -138,6 +142,7 @@ fn get_string_json(json: &str, key: &str) -> String {
 
 async fn coverage(json: String) -> String {
     let code = get_string_json(&json, "code");
+    let timeout: u64 = get_string_json(&json, "timeout").parse().unwrap_or(25);
     let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     let cov_file = format!("{}.cov", tempfile);
@@ -145,7 +150,7 @@ async fn coverage(json: String) -> String {
         let output = run_program_with_timeout(
             "coverage",
             &["run", "--data-file", cov_file.as_str(), tempfile.as_str()],
-            Duration::from_secs(60),
+            Duration::from_secs(timeout),
         )
         .await?;
         if output.status.code()? != 0 {
@@ -188,7 +193,8 @@ async fn coverage(json: String) -> String {
 
 async fn py_exec(json: String) -> String {
     let code = get_string_json(&json, "code");
-    let (res, tempfile) = run_py_code(&code).await;
+    let timeout: u64 = get_string_json(&json, "timeout").parse().unwrap_or(25);
+    let (res, tempfile) = run_py_code(&code, timeout).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }
@@ -196,7 +202,8 @@ async fn py_exec(json: String) -> String {
 async fn any_exec(json: String) -> String {
     let code = get_string_json(&json, "code");
     let lang = get_string_json(&json, "lang");
-    let (res, tempfile) = run_multipl_e_prog(&code, &lang).await;
+    let timeout: u64 = get_string_json(&json, "timeout").parse().unwrap_or(25);
+    let (res, tempfile) = run_multipl_e_prog(&code, &lang, timeout).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }

@@ -4,7 +4,7 @@ import json
 import threading
 
 
-def exec_test(server, code, test, timeout=30) -> Tuple[bool, str]:
+def exec_test(server, code, test, timeout=30, timeout_on_client=False) -> Tuple[bool, str]:
     """
     Executes a test against a code snippet.
     Produces true if the test passes, false otherwise.
@@ -12,14 +12,17 @@ def exec_test(server, code, test, timeout=30) -> Tuple[bool, str]:
 
     You can set test to an empty string if you want to execute the code without any tests
     and just check if it runs without errors.
+
+    timeout_on_client: If true, the client will timeout after timeout+2 seconds.
     """
     code_with_tests = code + "\n\n" + test
-    data = json.dumps({"code": code_with_tests})
+    data = json.dumps({"code": code_with_tests, "timeout": timeout})
     try:
         r = requests.post(
             server + "/py_exec",
             data=data,
-            timeout=timeout)
+            timeout=(timeout + 2) if timeout_on_client else None
+        )
         lines = r.text.split("\n")
         resp = lines[0]
         outs = "\n".join(lines[1:])
@@ -30,14 +33,16 @@ def exec_test(server, code, test, timeout=30) -> Tuple[bool, str]:
         return False, "Failed to execute program"
 
 
-def exec_test_multipl_e(server, code, test, lang, timeout=30) -> Tuple[bool, str]:
+def exec_test_multipl_e(server, code, test, lang, timeout=30, timeout_on_client=False) -> Tuple[bool, str]:
     code_with_tests = code + "\n\n" + test
-    data = json.dumps({"code": code_with_tests, "lang": lang})
+    data = json.dumps(
+        {"code": code_with_tests, "lang": lang, "timeout": timeout})
     try:
         r = requests.post(
             server + "/any_exec",
             data=data,
-            timeout=timeout)
+            timeout=(timeout + 2) if timeout_on_client else None
+        )
         lines = r.text.split("\n")
         resp = lines[0]
         outs = "\n".join(lines[1:])
@@ -59,7 +64,7 @@ def exec_test_multipl_e(server, code, test, lang, timeout=30) -> Tuple[bool, str
         return False, "Failed to execute program"
 
 
-def exec_test_batched(server, codes, tests, lang=None, timeout=30) -> List[Tuple[bool, str]]:
+def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_client=False) -> List[Tuple[bool, str]]:
     """
     Executes a batch of tests against a batch of code snippets using threading.
 
@@ -70,9 +75,10 @@ def exec_test_batched(server, codes, tests, lang=None, timeout=30) -> List[Tuple
 
     if lang:
         def exec_fn(code, test): return exec_test_multipl_e(
-            server, code, test, lang, timeout)
+            server, code, test, lang, timeout, timeout_on_client)
     else:
-        def exec_fn(code, test): return exec_test(server, code, test, timeout)
+        def exec_fn(code, test): return exec_test(
+            server, code, test, timeout, timeout_on_client)
 
     def exec_test_threaded(i, code, test):
         results[i] = exec_fn(code, test)
@@ -95,20 +101,19 @@ def exec_test_batched(server, codes, tests, lang=None, timeout=30) -> List[Tuple
     return results_new
 
 
-def run_coverage(server, code, tests):
+def run_coverage(server, code, tests, timeout=60, timeout_on_client=False) -> int:
     """
     Executes a code snippet and tests it with a set of tests,
     then returns the coverage percentage using coverage.py.
     """
     tests_str = "\n".join(tests)
     code_with_tests = code + "\n\n" + tests_str
-    data = json.dumps({"code": code_with_tests})
-    timeout = 80  # 60 for run, 10 for report, 10 for safety
+    data = json.dumps({"code": code_with_tests, "timeout": timeout})
     try:
         r = requests.post(
             server + "/py_coverage",
             data=data,
-            timeout=timeout,
+            timeout=(timeout + 20) if timeout_on_client else None
         )
         return int(r.text)
     except Exception as e:
@@ -116,7 +121,7 @@ def run_coverage(server, code, tests):
         return -3
 
 
-def run_coverage_batched(server, codes, tests):
+def run_coverage_batched(server, codes, tests, timeout=60, timeout_on_client=False) -> List[int]:
     """
     Executes a batch of code snippets and tests them with a set of tests,
     then returns the coverage percentage using coverage.py.
@@ -125,7 +130,8 @@ def run_coverage_batched(server, codes, tests):
     results: List[Optional[int]] = [None] * len(codes)
 
     def run_coverage_threaded(i, code, test):
-        results[i] = run_coverage(server, code, test)
+        results[i] = run_coverage(
+            server, code, test, timeout, timeout_on_client)
 
     for i, (code, test) in enumerate(zip(codes, tests)):
         t = threading.Thread(target=run_coverage_threaded,
@@ -136,5 +142,11 @@ def run_coverage_batched(server, codes, tests):
     for t in threads:
         t.join()
 
-    assert all(r is not None for r in results)
-    return results
+    results_new = []
+    for r in results:
+        if r is None:
+            results_new.append((False, "Failed to execute program"))
+        else:
+            results_new.append(r)
+
+    return results_new
