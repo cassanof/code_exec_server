@@ -4,7 +4,7 @@ import json
 import threading
 
 
-def exec_test(server, code, test, timeout=30, timeout_on_client=False) -> Tuple[bool, str]:
+def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="") -> Tuple[bool, str]:
     """
     Executes a test against a code snippet.
     Produces true if the test passes, false otherwise.
@@ -16,7 +16,7 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False) -> Tuple[
     timeout_on_client: If true, the client will timeout after timeout+2 seconds.
     """
     code_with_tests = code + "\n\n" + test
-    data = json.dumps({"code": code_with_tests, "timeout": timeout})
+    data = json.dumps({"code": code_with_tests, "timeout": timeout, "stdin": stdin})
     try:
         r = requests.post(
             server + "/py_exec",

@@ -21,6 +21,17 @@ print(pass_req)
 fail_req = code_exec_reqs.exec_test("http://127.0.0.1:8000", CODE_FAIL, "")
 print(fail_req)
 
+
+print("##### Testing stdin capture ######")
+CODE_STDIN = """
+inp = input()
+assert inp == "Hello, World!"
+print("stdin works")
+"""
+stdin_req = code_exec_reqs.exec_test(
+    "http://127.0.0.1:8000", CODE_STDIN, "", stdin="Hello, World!")
+print(stdin_req)
+
 print("###### Testing multiple pass/fail cases with Python ######")
 
 pass_req = code_exec_reqs.exec_test_multipl_e(

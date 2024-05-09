@@ -5,6 +5,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
+use tokio::io::AsyncWriteExt;
 
 #[tokio::main]
 async fn main() {
@@ -41,15 +42,21 @@ async fn create_temp_file(ext: &str) -> String {
 async fn run_program_with_timeout(
     program: &str,
     args: &[&str],
+    stdin_data: &[u8],
     timeout: Duration,
 ) -> Option<Output> {
     let _permit = CPU_SEMAPHORE.acquire().await.unwrap();
-    let child = tokio::process::Command::new(program)
+    let mut child = tokio::process::Command::new(program)
         .args(args)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
+        .stdin(std::process::Stdio::piped())
         .spawn()
         .ok()?;
+    if !stdin_data.is_empty() {
+        let stdin = child.stdin.as_mut().unwrap();
+        stdin.write_all(stdin_data).await.ok()?;
+    }
     let child_id = child.id().unwrap();
     let output = tokio::time::timeout(timeout, child.wait_with_output()).await;
     match output {
@@ -86,13 +93,14 @@ fn out_to_res(output: Option<Output>) -> String {
     }
 }
 
-async fn run_py_code(code: &str, timeout: u64) -> (String, String) {
+async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String) {
     let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     // check for timeout
     let output = run_program_with_timeout(
         "python3",
         &[tempfile.as_str()],
+        stdin.as_bytes(),
         Duration::from_secs(timeout),
     )
     .await;
@@ -119,6 +127,7 @@ async fn run_multipl_e_prog(code: &str, lang: &str, timeout: u64) -> (String, St
                 *CRATE_DIR, lang, lang, tempfile
             ),
         ],
+        &[], // TODO: add stdin opt for multipl-e
         Duration::from_secs(timeout),
     ).await;
     let res = out_to_res(output);
@@ -161,6 +170,7 @@ async fn coverage(json: String) -> String {
         let output = run_program_with_timeout(
             "coverage",
             &["run", "--data-file", cov_file.as_str(), tempfile.as_str()],
+            &[], // no stdin
             Duration::from_secs(timeout),
         )
         .await?;
@@ -170,6 +180,7 @@ async fn coverage(json: String) -> String {
         let output = run_program_with_timeout(
             "coverage",
             &["report", "--data-file", cov_file.as_str()],
+            &[], // no stdin
             Duration::from_secs(10),
         )
         .await?;
@@ -205,7 +216,8 @@ async fn coverage(json: String) -> String {
 async fn py_exec(json: String) -> String {
     let code = get_string_json(&json, "code");
     let timeout: u64 = get_int_json(&json, "timeout") as u64;
-    let (res, tempfile) = run_py_code(&code, timeout).await;
+    let stdin = get_string_json(&json, "stdin");
+    let (res, tempfile) = run_py_code(&code, timeout, stdin).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }
