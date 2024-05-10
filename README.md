@@ -17,6 +17,15 @@ If you are feeling dangerous, you can also just run the server
 directly with `./run.sh`. You'll need rust installed on your machine to compile the server along
 with whatever runtime the language of the code you want to execute requires.
 
+#### Increase Open File Limit
+
+If you plan to run crazy amounts of code in parallel, you might want to increase the open file limit of your machine:
+
+```bash
+sudo sysctl -w fs.file-max=1000000
+ulimit -n 1000000
+```
+
 ### Calling the Server
 
 We provide a simple Python library to interact with the server, which you can find in the `./code_exec_reqs.py` file.
