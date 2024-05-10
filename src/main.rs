@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -17,7 +17,11 @@ macro_rules! debug {
 
 #[tokio::main]
 async fn main() {
-    debug!("memory limit: {} bytes (GB: {})", *MEMORY_LIMIT, *MEMORY_LIMIT / 1024 / 1024);
+    debug!(
+        "memory limit: {} bytes (GB: {})",
+        *MEMORY_LIMIT,
+        *MEMORY_LIMIT / 1024 / 1024
+    );
     let app = Router::new()
         .route("/py_exec", post(py_exec))
         .route("/any_exec", post(any_exec))
@@ -73,24 +77,29 @@ async fn run_program_with_timeout(
         let stdin = child.stdin.as_mut().unwrap();
         stdin.write_all(stdin_data).await.ok()?;
     }
-    let child_id = child.id().unwrap();
-    let output = tokio::time::timeout(timeout, child.wait_with_output()).await;
+    let output = tokio::time::timeout(timeout, child.wait()).await;
+    let mut stdout = child.stdout.take()?;
+    let mut stderr = child.stderr.take()?;
+    let mut stdout_buf = Vec::new();
+    let mut stderr_buf = Vec::new();
     match output {
         Ok(output) => match output {
-            Ok(output) => Some(output),
+            Ok(output) => {
+                stdout.read_to_end(&mut stdout_buf).await.ok()?;
+                stderr.read_to_end(&mut stderr_buf).await.ok()?;
+                Some(std::process::Output {
+                    status: output,
+                    stdout: stdout_buf,
+                    stderr: stderr_buf,
+                })
+            }
             Err(_) => {
-                let _ = tokio::process::Command::new("kill")
-                    .arg("-9")
-                    .arg(format!("{}", child_id))
-                    .spawn();
+                child.kill().await.ok();
                 None
             }
         },
         Err(_) => {
-            let _ = tokio::process::Command::new("kill")
-                .arg("-9")
-                .arg(format!("{}", child_id))
-                .spawn();
+            child.kill().await.ok();
             None
         }
     }
