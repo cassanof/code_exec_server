@@ -17,6 +17,7 @@ macro_rules! debug {
 
 #[tokio::main]
 async fn main() {
+    debug!("memory limit: {} bytes (GB: {})", *MEMORY_LIMIT, *MEMORY_LIMIT / 1024 / 1024);
     let app = Router::new()
         .route("/py_exec", post(py_exec))
         .route("/any_exec", post(any_exec))
@@ -30,10 +31,17 @@ async fn main() {
 
 lazy_static! {
     static ref FILE_IDX: AtomicUsize = AtomicUsize::new(0);
+    static ref CPUS_AVAILABLE: usize = std::thread::available_parallelism().unwrap().into();
     static ref CPU_SEMAPHORE: tokio::sync::Semaphore =
-        tokio::sync::Semaphore::new(std::thread::available_parallelism().unwrap().into());
+        tokio::sync::Semaphore::new(*CPUS_AVAILABLE);
     static ref CRATE_DIR: String =
         std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    // this is total ram / cpu count. this is in kilobytes
+    static ref MEMORY_LIMIT: usize = {
+        let mem = sys_info::mem_info().unwrap().total as usize;
+        let cpus = *CPUS_AVAILABLE;
+        mem / cpus
+    };
 }
 
 async fn create_temp_file(ext: &str) -> String {
