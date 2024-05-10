@@ -92,7 +92,7 @@ def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_cl
         t.start()
 
     for t in threads:
-        t.join()
+        t.join(timeout=timeout*2)
 
     results_new = []
     for r in results:
