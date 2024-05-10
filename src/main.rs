@@ -7,6 +7,14 @@ use std::{
 };
 use tokio::io::AsyncWriteExt;
 
+macro_rules! debug {
+    ($($arg:tt)*) => {
+        if cfg!(debug_assertions) {
+            println!($($arg)*);
+        }
+    };
+}
+
 #[tokio::main]
 async fn main() {
     let app = Router::new()
@@ -107,7 +115,7 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String
 
     let res = out_to_res(output);
 
-    println!("{}: {}", tempfile, res);
+    debug!("{}: {}", tempfile, res);
     (res, tempfile)
 }
 
@@ -132,7 +140,7 @@ async fn run_multipl_e_prog(code: &str, lang: &str, timeout: u64) -> (String, St
     ).await;
     let res = out_to_res(output);
 
-    println!("{}: {}", tempfile, res);
+    debug!("{}: {}", tempfile, res);
     (res, tempfile)
 }
 
