@@ -1,4 +1,4 @@
-FROM elleven11/multipl-e-evaluation:latest
+FROM docker.io/elleven11/multipl-e-evaluation:latest
 
 RUN apt update --fix-missing && apt install -y \
     cargo \
