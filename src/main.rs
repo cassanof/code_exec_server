@@ -36,8 +36,6 @@ async fn main() {
 lazy_static! {
     static ref FILE_IDX: AtomicUsize = AtomicUsize::new(0);
     static ref CPUS_AVAILABLE: usize = std::thread::available_parallelism().unwrap().into();
-    static ref CPU_SEMAPHORE: tokio::sync::Semaphore =
-        tokio::sync::Semaphore::new(*CPUS_AVAILABLE);
     static ref CRATE_DIR: String =
         std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
     // this is total ram / cpu count. this is in kilobytes
@@ -65,7 +63,6 @@ async fn run_program_with_timeout(
     stdin_data: &[u8],
     timeout: Duration,
 ) -> Option<Output> {
-    let _permit = CPU_SEMAPHORE.acquire().await.unwrap();
     let mut child = unsafe {
         tokio::process::Command::new(program)
             .args(args)
