@@ -121,10 +121,12 @@ fn out_to_res(output: Option<Output>) -> String {
 async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String) {
     let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
-    // check for timeout
     let output = run_program_with_timeout(
-        "python3",
-        &[tempfile.as_str()],
+        "bash",
+        &[
+            "-c",
+            &format!("ulimit -v {}; python3 {}", *MEMORY_LIMIT, tempfile),
+        ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
     )

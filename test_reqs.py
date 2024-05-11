@@ -1,6 +1,7 @@
 """
 Testing program to send a bunch of reqs
 """
+import time
 import code_exec_reqs
 
 CODE_PASS = """
@@ -30,6 +31,16 @@ print("stdin works")
 stdin_req = code_exec_reqs.exec_test(
     "http://127.0.0.1:8000", CODE_STDIN, "", stdin="Hello, World!")
 print(stdin_req)
+
+print("##### Testing memory overflow case ######")
+CODE_OVERFLOW = """
+a = []
+while True:
+    a.append([42]*10000)
+"""
+codeoverflow_req = code_exec_reqs.exec_test(
+        "http://127.0.0.1:8000", CODE_OVERFLOW, "")
+print(codeoverflow_req)
 
 print("###### Testing multiple pass/fail cases with Python ######")
 
@@ -113,14 +124,12 @@ batched_req = code_exec_reqs.exec_test_batched(
 print(batched_req)
 
 
-
 print("###### Testing timeout case with Python ######")
 # timeout on python
 CODE_TIMEOUT = """
 while True:
     pass
 """
-import time
 time_now = time.time()
 timeout_req = code_exec_reqs.exec_test(
     "http://127.0.0.1:8000", CODE_TIMEOUT, "", timeout=5)
