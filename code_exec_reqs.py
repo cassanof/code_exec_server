@@ -16,7 +16,8 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
     timeout_on_client: If true, the client will timeout after timeout+2 seconds.
     """
     code_with_tests = code + "\n\n" + test
-    data = json.dumps({"code": code_with_tests, "timeout": timeout, "stdin": stdin})
+    data = json.dumps(
+        {"code": code_with_tests, "timeout": timeout, "stdin": stdin})
     try:
         r = requests.post(
             server + "/py_exec",
@@ -29,8 +30,7 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
         assert resp == "0" or resp == "1"
         return resp == "0", outs
     except Exception as e:
-        print(e)
-        return False, "Failed to execute program"
+        return False, "Failed to execute program: " + str(e)
 
 
 def exec_test_multipl_e(server, code, test, lang, timeout=30, timeout_on_client=False) -> Tuple[bool, str]:
@@ -61,7 +61,7 @@ def exec_test_multipl_e(server, code, test, lang, timeout=30, timeout_on_client=
         return resp == 0, outs
     except Exception as e:
         print(e)
-        return False, "Failed to execute program"
+        return False, "Failed to execute program: " + str(e)
 
 
 def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_client=False, stdins=None) -> List[Tuple[bool, str]]:
@@ -75,6 +75,7 @@ def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_cl
 
     if lang and lang != "python":
         assert stdins is None, "stdins are not supported for non-python languages for now"
+
         def exec_fn(code, test, _): return exec_test_multipl_e(
             server, code, test, lang, timeout, timeout_on_client)
     else:
@@ -87,7 +88,8 @@ def exec_test_batched(server, codes, tests, lang=None, timeout=30, timeout_on_cl
     stdins = stdins or [None] * len(codes)
 
     for i, (code, test, stdin) in enumerate(zip(codes, tests, stdins)):
-        t = threading.Thread(target=exec_test_threaded, args=(i, code, test, stdin))
+        t = threading.Thread(target=exec_test_threaded,
+                             args=(i, code, test, stdin))
         threads.append(t)
         t.start()
 
