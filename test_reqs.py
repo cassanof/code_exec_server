@@ -42,6 +42,15 @@ codeoverflow_req = code_exec_reqs.exec_test(
         "http://127.0.0.1:8000", CODE_OVERFLOW, "")
 print(codeoverflow_req)
 
+print("###### Testing child trying to kill parent process ######")
+CODE_KILL = """
+import os
+print(os.kill(os.getppid(), 9))
+"""
+kill_req = code_exec_reqs.exec_test(
+    "http://127.0.0.1:8000", CODE_KILL, "")
+print(kill_req)
+
 print("###### Testing multiple pass/fail cases with Python ######")
 
 pass_req = code_exec_reqs.exec_test_multipl_e(
