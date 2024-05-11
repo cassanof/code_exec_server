@@ -66,13 +66,22 @@ async fn run_program_with_timeout(
     timeout: Duration,
 ) -> Option<Output> {
     let _permit = CPU_SEMAPHORE.acquire().await.unwrap();
-    let mut child = tokio::process::Command::new(program)
-        .args(args)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .ok()?;
+    let mut child = unsafe {
+        tokio::process::Command::new(program)
+            .args(args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .stdin(std::process::Stdio::piped())
+            // NOTE: this is the unsafe bit
+            .pre_exec(move || {
+                // restrict gid and uid
+                nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
+                nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
+                Ok(())
+            })
+            .spawn()
+            .ok()?
+    };
     if !stdin_data.is_empty() {
         let stdin = child.stdin.as_mut().unwrap();
         stdin.write_all(stdin_data).await.ok()?;
