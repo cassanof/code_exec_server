@@ -36,7 +36,7 @@ print("##### Testing memory overflow case ######")
 CODE_OVERFLOW = """
 a = []
 while True:
-    a.append([42]*10000)
+    a.append([42]*100000)
 """
 codeoverflow_req = code_exec_reqs.exec_test(
         "http://127.0.0.1:8000", CODE_OVERFLOW, "")
