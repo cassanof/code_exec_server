@@ -57,12 +57,34 @@ async fn create_temp_file(ext: &str) -> String {
     filename
 }
 
+// error for Result<Output, ExecError>
+#[derive(Debug)]
+enum ExecError {
+    IoError(std::io::Error),
+    Utf8Error(std::string::FromUtf8Error),
+    Timeout,
+}
+
+impl From<std::io::Error> for ExecError {
+    fn from(e: std::io::Error) -> Self {
+        ExecError::IoError(e)
+    }
+}
+
+impl From<std::string::FromUtf8Error> for ExecError {
+    fn from(e: std::string::FromUtf8Error) -> Self {
+        ExecError::Utf8Error(e)
+    }
+}
+
+type ExecResult = Result<Output, ExecError>;
+
 async fn run_program_with_timeout(
     program: &str,
     args: &[&str],
     stdin_data: &[u8],
     timeout: Duration,
-) -> Option<Output> {
+) -> ExecResult {
     let mut child = unsafe {
         tokio::process::Command::new(program)
             .args(args)
@@ -76,51 +98,55 @@ async fn run_program_with_timeout(
                 nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
                 Ok(())
             })
-            .spawn()
-            .ok()?
+            .spawn()?
     };
     if !stdin_data.is_empty() {
         let stdin = child.stdin.as_mut().unwrap();
-        stdin.write_all(stdin_data).await.ok()?;
+        stdin.write_all(stdin_data).await?;
     }
     let output = tokio::time::timeout(timeout, child.wait()).await;
-    let mut stdout = child.stdout.take()?;
-    let mut stderr = child.stderr.take()?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or(ExecError::IoError(std::io::Error::from_raw_os_error(0)))?;
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or(ExecError::IoError(std::io::Error::from_raw_os_error(0)))?;
     let mut stdout_buf = Vec::new();
     let mut stderr_buf = Vec::new();
     match output {
         Ok(output) => match output {
             Ok(output) => {
-                stdout.read_to_end(&mut stdout_buf).await.ok()?;
-                stderr.read_to_end(&mut stderr_buf).await.ok()?;
-                Some(std::process::Output {
+                stdout.read_to_end(&mut stdout_buf).await?;
+                stderr.read_to_end(&mut stderr_buf).await?;
+                Ok(std::process::Output {
                     status: output,
                     stdout: stdout_buf,
                     stderr: stderr_buf,
                 })
             }
-            Err(_) => {
+            Err(e) => {
                 child.kill().await.ok();
-                None
+                Err(ExecError::IoError(e))
             }
         },
         Err(_) => {
             child.kill().await.ok();
-            None
+            Err(ExecError::Timeout)
         }
     }
 }
 
-fn out_to_res(output: Option<Output>) -> String {
-    match output.as_ref().map(|o| o.status.code().unwrap_or(-1)) {
-        Some(0) => format!("0\n{}", String::from_utf8_lossy(&output.unwrap().stdout)),
-        Some(-1) => "1\nTimeout".to_string(),
-        _ => format!(
-            "1\n{}",
-            output
-                .map(|o| String::from_utf8_lossy(&o.stderr).to_string())
-                .unwrap_or_default(),
-        ),
+fn out_to_res(output: ExecResult) -> String {
+    match output {
+        Ok(o) if o.status.code().unwrap_or(-1) == 0 => {
+            format!("0\n{}", String::from_utf8_lossy(&o.stdout))
+        }
+        Ok(o) => format!("1\n{}", String::from_utf8_lossy(&o.stderr)),
+        Err(ExecError::Timeout) => "1\nTimeout".to_string(),
+        Err(ExecError::IoError(e)) => format!("1\n{}", e),
+        Err(ExecError::Utf8Error(e)) => format!("1\n{}", e),
     }
 }
 
@@ -206,7 +232,8 @@ async fn coverage(json: String) -> String {
             &[], // no stdin
             Duration::from_secs(timeout),
         )
-        .await?;
+        .await
+        .ok()?;
         if output.status.code()? != 0 {
             return None;
         }
@@ -216,7 +243,8 @@ async fn coverage(json: String) -> String {
             &[], // no stdin
             Duration::from_secs(10),
         )
-        .await?;
+        .await
+        .ok()?;
         if output.status.code()? != 0 {
             return None;
         }
