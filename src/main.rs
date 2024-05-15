@@ -1,4 +1,4 @@
-use axum::{routing::post, Router};
+use axum::{extract::DefaultBodyLimit, routing::post, Router};
 use lazy_static::lazy_static;
 use std::{
     process::Output,
@@ -25,7 +25,8 @@ async fn main() {
     let app = Router::new()
         .route("/py_exec", post(py_exec))
         .route("/any_exec", post(any_exec))
-        .route("/py_coverage", post(coverage));
+        .route("/py_coverage", post(coverage))
+        .layer(DefaultBodyLimit::max(std::usize::MAX));
 
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
         .serve(app.into_make_service())
