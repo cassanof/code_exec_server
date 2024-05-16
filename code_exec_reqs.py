@@ -155,3 +155,11 @@ def run_coverage_batched(server, codes, tests, timeout=60, timeout_on_client=Fal
             results_new.append(r)
 
     return results_new
+
+
+def check_executor_alive(executor):
+    try:
+        r = requests.get(executor + "/")
+        return r.status_code == 200 or r.status_code == 404
+    except Exception as e:
+        return False
