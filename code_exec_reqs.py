@@ -161,5 +161,5 @@ def check_executor_alive(executor):
     try:
         r = requests.get(executor + "/")
         return r.status_code == 200 or r.status_code == 404
-    except Exception as e:
+    except Exception:
         return False
