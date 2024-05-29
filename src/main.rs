@@ -139,30 +139,12 @@ async fn run_program_with_timeout(
     }
 }
 
-fn out_to_res(output: ExecResult, capture_all: bool) -> String {
+fn out_to_res(output: ExecResult) -> String {
     match output {
         Ok(o) if o.status.code().unwrap_or(-1) == 0 => {
-            if capture_all {
-                format!(
-                    "0\n{}\n{}",
-                    String::from_utf8_lossy(&o.stdout),
-                    String::from_utf8_lossy(&o.stderr)
-                )
-            } else {
-                format!("0\n{}", String::from_utf8_lossy(&o.stdout))
-            }
+            format!("0\n{}", String::from_utf8_lossy(&o.stdout))
         }
-        Ok(o) => {
-            if capture_all {
-                format!(
-                    "1\n{}\n{}",
-                    String::from_utf8_lossy(&o.stdout),
-                    String::from_utf8_lossy(&o.stderr)
-                )
-            } else {
-                format!("1\n{}", String::from_utf8_lossy(&o.stderr))
-            }
-        }
+        Ok(o) => format!("1\n{}", String::from_utf8_lossy(&o.stderr)),
         Err(ExecError::Timeout) => "1\nTimeout".to_string(),
         Err(ExecError::IoError(e)) => format!("1\n{}", e),
         Err(ExecError::Utf8Error(e)) => format!("1\n{}", e),
@@ -183,7 +165,7 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String
     )
     .await;
 
-    let res = out_to_res(output, false);
+    let res = out_to_res(output);
 
     debug!("{}: {}", tempfile, res);
     (res, tempfile)
@@ -208,7 +190,7 @@ async fn run_multipl_e_prog(code: &str, lang: &str, timeout: u64) -> (String, St
         &[], // TODO: add stdin opt for multipl-e
         Duration::from_secs(timeout),
     ).await;
-    let res = out_to_res(output, true);
+    let res = out_to_res(output);
 
     debug!("{}: {}", tempfile, res);
     (res, tempfile)
