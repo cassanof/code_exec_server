@@ -57,7 +57,7 @@ def exec_test_multipl_e(server, code, test, lang, timeout=30, timeout_on_client=
 
         # get real status code
         resp = outs["exit_code"]
-        outs = outs["stdout"] if resp == 0 else outs["stderr"]
+        outs = outs["stdout"] + outs["stderr"]
         return resp == 0, outs
     except Exception as e:
         print(e)
