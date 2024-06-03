@@ -1,4 +1,5 @@
 from typing import List, Optional, Tuple
+import time
 import requests
 import json
 import threading
@@ -18,19 +19,28 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
     code_with_tests = code + "\n\n" + test
     data = json.dumps(
         {"code": code_with_tests, "timeout": timeout, "stdin": stdin})
-    try:
-        r = requests.post(
-            server + "/py_exec",
-            data=data,
-            timeout=(timeout + 2) if timeout_on_client else None
-        )
-        lines = r.text.split("\n")
-        resp = lines[0]
-        outs = "\n".join(lines[1:])
-        assert resp == "0" or resp == "1"
-        return resp == "0", outs
-    except Exception as e:
-        return False, "Failed to execute program: " + str(e)
+    while True: # loop for server downtime
+        try:
+            r = requests.post(
+                server + "/py_exec",
+                data=data,
+                timeout=(timeout + 2) if timeout_on_client else None
+            )
+            lines = r.text.split("\n")
+            resp = lines[0]
+            outs = "\n".join(lines[1:])
+            assert resp == "0" or resp == "1"
+            return resp == "0", outs
+        except Exception as e:
+            # check if the server is alive
+            if not check_executor_alive(server):
+                # wait for the server to come back up
+                print("Server is down, waiting for it to come back up...")
+                time.sleep(3)
+                continue
+            else:
+                # genuine server error
+                return False, "Failed to execute program: " + str(e)
 
 
 def exec_test_multipl_e(server, code, test, lang, timeout=30, timeout_on_client=False) -> Tuple[bool, str]:
