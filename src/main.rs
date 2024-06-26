@@ -151,14 +151,13 @@ fn out_to_res(output: ExecResult) -> String {
     }
 }
 
-async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String) {
-    let tempfile = create_temp_file("py").await;
-    tokio::fs::write(&tempfile, code).await.unwrap();
+async fn run_py_code(code: &str, timeout: u64, stdin: String) -> String {
+    let escaped_code = code.replace('\'', "\\'");
     let output = run_program_with_timeout(
         "bash",
         &[
             "-c",
-            &format!("ulimit -v {}; python3 {}", *MEMORY_LIMIT, tempfile),
+            &format!("ulimit -v {}; python3 -c '{}'", *MEMORY_LIMIT, escaped_code),
         ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
@@ -167,8 +166,8 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String
 
     let res = out_to_res(output);
 
-    debug!("{}: {}", tempfile, res);
-    (res, tempfile)
+    debug!("{}", res);
+    res
 }
 
 async fn run_multipl_e_prog(code: &str, lang: &str, timeout: u64) -> (String, String) {
@@ -279,9 +278,7 @@ async fn py_exec(json: String) -> String {
     let code = get_string_json(&json, "code");
     let timeout: u64 = get_int_json(&json, "timeout") as u64;
     let stdin = get_string_json(&json, "stdin");
-    let (res, tempfile) = run_py_code(&code, timeout, stdin).await;
-    tokio::fs::remove_file(&tempfile).await.unwrap();
-    res
+    run_py_code(&code, timeout, stdin).await
 }
 
 async fn any_exec(json: String) -> String {
