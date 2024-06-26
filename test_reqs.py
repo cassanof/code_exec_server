@@ -32,6 +32,15 @@ stdin_req = code_exec_reqs.exec_test(
     "http://127.0.0.1:8000", CODE_STDIN, "", stdin="Hello, World!")
 print(stdin_req)
 
+print("##### Testing string escape cases ######")
+CODE_ESCAPE = """
+print("Hello,'' World!")
+print('abc\\''def')
+"""
+escape_req = code_exec_reqs.exec_test(
+    "http://127.0.0.1:8000", CODE_ESCAPE, "")
+print(escape_req)
+
 print("##### Testing memory overflow case ######")
 CODE_OVERFLOW = """
 a = []
