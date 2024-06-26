@@ -157,7 +157,7 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String) -> String {
         "bash",
         &[
             "-c",
-            &format!("ulimit -v {}; python3 -c '{}'", *MEMORY_LIMIT, escaped_code),
+            &format!("ulimit -v {}; python3 -c $'{}'", *MEMORY_LIMIT, escaped_code),
         ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
