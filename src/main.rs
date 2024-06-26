@@ -152,9 +152,17 @@ fn out_to_res(output: ExecResult) -> String {
 }
 
 async fn run_py_code(code: &str, timeout: u64, stdin: String) -> String {
+    // all escape sequences are valid in python
+    let escaped_code = code.replace('\\', "\\\\").replace('\'', "\\'");
     let output = run_program_with_timeout(
-        "python3",
-        &["-c", code],
+        "bash",
+        &[
+            "-c",
+            &format!(
+                "ulimit -v {}; python3 -c $'{}'",
+                *MEMORY_LIMIT, escaped_code
+            ),
+        ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
     )
