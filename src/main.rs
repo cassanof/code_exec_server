@@ -97,6 +97,16 @@ async fn run_program_with_timeout(
                 // restrict gid and uid
                 nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
                 nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
+                // limit memory
+                // nix::sys::resource::setrlimit(resource, soft_limit, hard_limit)
+                // resource: the resource to limit
+                // soft_limit: the soft limit of the resource
+                // hard_limit: the hard limit of the resource
+                nix::sys::resource::setrlimit(
+                    nix::sys::resource::Resource::RLIMIT_AS,
+                    (*MEMORY_LIMIT).try_into().unwrap(),
+                    (*MEMORY_LIMIT).try_into().unwrap(),
+                )?;
                 Ok(())
             })
             .spawn()?
