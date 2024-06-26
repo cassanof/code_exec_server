@@ -97,13 +97,6 @@ async fn run_program_with_timeout(
                 // restrict gid and uid
                 nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
                 nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
-                // increase ulimit -s (stack size) to 512MB
-                let stack = 512 * 1024 * 1024;
-                nix::sys::resource::setrlimit(
-                    nix::sys::resource::Resource::RLIMIT_STACK,
-                    stack,
-                    stack,
-                )?;
                 Ok(())
             })
             .spawn()?
@@ -158,10 +151,15 @@ fn out_to_res(output: ExecResult) -> String {
     }
 }
 
-async fn run_py_code(code: &str, timeout: u64, stdin: String) -> String {
+async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String) {
+    let tempfile = create_temp_file("py").await;
+    tokio::fs::write(&tempfile, code).await.unwrap();
     let output = run_program_with_timeout(
-        "python3",
-        &["-c", code],
+        "bash",
+        &[
+            "-c",
+            &format!("ulimit -v {}; python3 {}", *MEMORY_LIMIT, tempfile),
+        ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
     )
@@ -169,8 +167,8 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String) -> String {
 
     let res = out_to_res(output);
 
-    debug!("{}", res);
-    res
+    debug!("{}: {}", tempfile, res);
+    (res, tempfile)
 }
 
 async fn run_multipl_e_prog(code: &str, lang: &str, timeout: u64) -> (String, String) {
@@ -281,7 +279,9 @@ async fn py_exec(json: String) -> String {
     let code = get_string_json(&json, "code");
     let timeout: u64 = get_int_json(&json, "timeout") as u64;
     let stdin = get_string_json(&json, "stdin");
-    run_py_code(&code, timeout, stdin).await
+    let (res, tempfile) = run_py_code(&code, timeout, stdin).await;
+    tokio::fs::remove_file(&tempfile).await.unwrap();
+    res
 }
 
 async fn any_exec(json: String) -> String {
