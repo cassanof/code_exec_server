@@ -101,8 +101,8 @@ async fn run_program_with_timeout(
                 // hard_limit: the hard limit of the resource
                 nix::sys::resource::setrlimit(
                     nix::sys::resource::Resource::RLIMIT_AS,
-                    (*MEMORY_LIMIT).try_into().unwrap(),
-                    (*MEMORY_LIMIT).try_into().unwrap(),
+                    (*MEMORY_LIMIT * 1024) as nix::sys::resource::rlim_t,
+                    (*MEMORY_LIMIT * 1024) as nix::sys::resource::rlim_t,
                 )?;
                 // restrict gid and uid
                 nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
