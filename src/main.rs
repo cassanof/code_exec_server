@@ -94,9 +94,6 @@ async fn run_program_with_timeout(
             .stdin(std::process::Stdio::piped())
             // NOTE: this is the unsafe bit
             .pre_exec(move || {
-                // restrict gid and uid
-                nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
-                nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
                 // limit memory
                 // nix::sys::resource::setrlimit(resource, soft_limit, hard_limit)
                 // resource: the resource to limit
@@ -107,6 +104,9 @@ async fn run_program_with_timeout(
                     (*MEMORY_LIMIT).try_into().unwrap(),
                     (*MEMORY_LIMIT).try_into().unwrap(),
                 )?;
+                // restrict gid and uid
+                nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
+                nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
                 Ok(())
             })
             .spawn()?
