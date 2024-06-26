@@ -44,6 +44,8 @@ print(escape_req)
 
 print("##### Testing memory overflow case ######")
 CODE_OVERFLOW = """
+import resource # limit memory to 4GB
+resource.setrlimit(resource.RLIMIT_AS, (4 * 1024**3, 4 * 1024**3))
 a = []
 while True:
     a.append([42]*100000)
