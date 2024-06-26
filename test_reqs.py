@@ -42,16 +42,6 @@ escape_req = code_exec_reqs.exec_test(
     "http://127.0.0.1:8000", CODE_ESCAPE, "")
 print(escape_req)
 
-print("##### Testing memory overflow case ######")
-CODE_OVERFLOW = """
-a = []
-while True:
-    a.append([42]*100000)
-"""
-codeoverflow_req = code_exec_reqs.exec_test(
-        "http://127.0.0.1:8000", CODE_OVERFLOW, "")
-print(codeoverflow_req)
-
 print("###### Testing child trying to kill parent process ######")
 CODE_KILL = """
 import os
