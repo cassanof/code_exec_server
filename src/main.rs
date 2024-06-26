@@ -94,16 +94,6 @@ async fn run_program_with_timeout(
             .stdin(std::process::Stdio::piped())
             // NOTE: this is the unsafe bit
             .pre_exec(move || {
-                // limit memory
-                // nix::sys::resource::setrlimit(resource, soft_limit, hard_limit)
-                // resource: the resource to limit
-                // soft_limit: the soft limit of the resource
-                // hard_limit: the hard limit of the resource
-                nix::sys::resource::setrlimit(
-                    nix::sys::resource::Resource::RLIMIT_AS,
-                    (*MEMORY_LIMIT * 1024) as nix::sys::resource::rlim_t,
-                    (*MEMORY_LIMIT * 1024) as nix::sys::resource::rlim_t,
-                )?;
                 // restrict gid and uid
                 nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
                 nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
@@ -163,8 +153,17 @@ fn out_to_res(output: ExecResult) -> String {
 
 async fn run_py_code(code: &str, timeout: u64, stdin: String) -> String {
     let output = run_program_with_timeout(
-        "python3",
-        &["-c", code],
+        "bash",
+        &[
+            "-c",
+            "ulimit",
+            "-v",
+            &format!("{}", *MEMORY_LIMIT),
+            "&&",
+            "python3",
+            "-c",
+            code,
+        ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
     )
