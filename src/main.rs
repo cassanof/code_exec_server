@@ -97,6 +97,13 @@ async fn run_program_with_timeout(
                 // restrict gid and uid
                 nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
                 nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
+                // increase ulimit -s (stack size) to 8GB
+                let gbs = 1024 * 1024 * 1024 * 8;
+                nix::sys::resource::setrlimit(
+                    nix::sys::resource::Resource::RLIMIT_STACK,
+                    gbs,
+                    gbs,
+                )?;
                 Ok(())
             })
             .spawn()?
