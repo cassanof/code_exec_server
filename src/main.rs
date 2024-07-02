@@ -50,7 +50,7 @@ lazy_static! {
 async fn create_temp_file(ext: &str) -> String {
     let idx = FILE_IDX.fetch_add(1, Ordering::SeqCst);
     // temp dir
-    let temp_dir = std::env::temp_dir().join("codeexec");
+    let temp_dir = std::path::PathBuf::from("/dev/shm/codeexec"); // uses /dev/shm for miles faster IO
     if !temp_dir.exists() {
         tokio::fs::create_dir_all(&temp_dir).await.unwrap();
     }
