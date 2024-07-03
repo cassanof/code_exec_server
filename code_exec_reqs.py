@@ -16,6 +16,7 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
 
     timeout_on_client: If true, the client will timeout after timeout+2 seconds.
     """
+    assert isinstance(timeout, int), "Timeout needs to be an integer"
     code_with_tests = code + "\n\n" + test
     data = json.dumps(
         {"code": code_with_tests, "timeout": timeout, "stdin": stdin})
@@ -44,6 +45,7 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
 
 
 def exec_test_multipl_e(server, code, test, lang, timeout=30, timeout_on_client=False) -> Tuple[bool, str]:
+    assert isinstance(timeout, int), "Timeout needs to be an integer"
     code_with_tests = code + "\n\n" + test
     data = json.dumps(
         {"code": code_with_tests, "lang": lang, "timeout": timeout})
@@ -121,6 +123,7 @@ def run_coverage(server, code, tests, timeout=60, timeout_on_client=False) -> in
     Executes a code snippet and tests it with a set of tests,
     then returns the coverage percentage using coverage.py.
     """
+    assert isinstance(timeout, int), "Timeout needs to be an integer"
     tests_str = "\n".join(tests)
     code_with_tests = code + "\n\n" + tests_str
     data = json.dumps({"code": code_with_tests, "timeout": timeout})
