@@ -9,7 +9,7 @@ edition = "2021"
 axum = "0.6.18"
 base64 = "0.21.2"
 lazy_static = "1.4.0"
-nix = { version = "0.28.0", features = ["user", "resource"] }
+nix = { version = "0.28.0", features = ["user", "resource", "process", "signal"] }
 serde = { version = "1.0.200", features = ["derive"] }
 serde_json = "1.0.116"
 sys-info = "0.9.1"
