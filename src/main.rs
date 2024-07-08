@@ -36,14 +36,11 @@ async fn main() {
         .route("/py_coverage", post(coverage))
         .layer(DefaultBodyLimit::max(std::usize::MAX));
 
-    tokio::spawn(garbage_collector());
     axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
 }
-
-type PidTime = (Option<u32>, std::time::Instant);
 
 lazy_static! {
     static ref FILE_IDX: AtomicUsize = AtomicUsize::new(0);
@@ -56,12 +53,6 @@ lazy_static! {
         let cpus = *CPUS_AVAILABLE;
         mem / cpus
     };
-    static ref MAX_ALIVE_TIME: Duration = Duration::from_secs(300);
-    // this is a channel that keeps track of the pids and their start time
-    static ref PID_CHANNEL: Arc<(Sender<PidTime>, Mutex<Receiver<PidTime>>)> = {
-        let (tx, rx) = channel(10_000_000);
-        Arc::new((tx, Mutex::new(rx)))
-    };
 }
 
 async fn create_temp_file(ext: &str) -> String {
@@ -73,29 +64,6 @@ async fn create_temp_file(ext: &str) -> String {
     }
     let filename = format!("{}/{}.{}", temp_dir.to_string_lossy(), idx, ext);
     filename
-}
-
-async fn garbage_collector() {
-    let mut rx = PID_CHANNEL.1.lock().await;
-    loop {
-        let (pid, start_time) = rx.recv().await.unwrap();
-        if let Some(pid) = pid {
-            let p_pid = Pid::from_raw(pid as i32);
-            let status = nix::sys::wait::waitpid(p_pid, None).unwrap();
-            if status == nix::sys::wait::WaitStatus::Exited(p_pid, 0) {
-                // process exited normally
-                continue;
-            }
-            if start_time.elapsed() > *MAX_ALIVE_TIME {
-                // kill the process
-                debug!("killing pid: {}", pid);
-                nix::sys::signal::kill(p_pid, nix::sys::signal::Signal::SIGKILL).unwrap();
-            } else {
-                // send it back
-                PID_CHANNEL.0.send((Some(pid), start_time)).await.unwrap();
-            }
-        }
-    }
 }
 
 // error for Result<Output, ExecError>
@@ -155,11 +123,6 @@ async fn run_program_with_timeout(
         .take()
         .ok_or(ExecError::IoError(std::io::Error::from_raw_os_error(0)))?;
     let pid = child.id();
-    PID_CHANNEL // send to GC
-        .0
-        .send((pid, std::time::Instant::now()))
-        .await
-        .unwrap();
     let mut stdout_buf = Vec::new();
     let mut stderr_buf = Vec::new();
     match output {
