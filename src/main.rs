@@ -1,10 +1,8 @@
-use axum::{extract::DefaultBodyLimit, routing::post, Router};
+use axum::{extract::DefaultBodyLimit, routing::{get, post}, Router};
 use lazy_static::lazy_static;
 use std::{
     process::Output,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
 use tokio::io::AsyncReadExt;
@@ -18,6 +16,7 @@ macro_rules! debug {
     };
 }
 
+
 #[tokio::main]
 async fn main() {
     debug!(
@@ -29,12 +28,27 @@ async fn main() {
         .route("/py_exec", post(py_exec))
         .route("/any_exec", post(any_exec))
         .route("/py_coverage", post(coverage))
+        .route("/health", get(health_check))
         .layer(DefaultBodyLimit::max(std::usize::MAX));
 
-    axum::Server::bind(&"0.0.0.0:8000".parse().unwrap())
+    let args: Vec<String> = std::env::args().collect();
+    let port = args
+        .iter()
+        .position(|arg| arg == "--port")
+        .and_then(|index| args.get(index + 1))
+        .map(|port| port.to_string())
+        .unwrap_or_else(|| "8000".to_string());
+
+    let addr = format!("0.0.0.0:{}", port);
+
+    axum::Server::bind(&addr.parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+async fn health_check() -> &'static str {
+    "OK"
 }
 
 lazy_static! {
