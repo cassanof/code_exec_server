@@ -124,7 +124,6 @@ async fn run_program_with_timeout(
         .stderr
         .take()
         .ok_or(ExecError::IoError(std::io::Error::from_raw_os_error(0)))?;
-    let pid = child.id();
     let mut stdout_buf = Vec::new();
     let mut stderr_buf = Vec::new();
     match output {
@@ -207,42 +206,40 @@ async fn run_multipl_e_prog(code: &str, lang: &str, timeout: u64) -> (String, St
     (res, tempfile)
 }
 
-/// hacky but i'm lazy
-fn get_string_json(json: &str, key: &str) -> String {
-    serde_json::from_str::<serde_json::Value>(json)
-        .map(|v| {
-            v.get(key)
-                .unwrap_or(&serde_json::Value::Null)
-                .as_str()
-                .unwrap_or("")
-                .to_string()
-        })
-        .unwrap_or_default()
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct JsonInput {
+    code: String,
+    timeout: u64,
+    stdin: Option<String>,
+    lang: Option<String>,
 }
 
-fn get_int_json(json: &str, key: &str) -> i64 {
-    serde_json::from_str::<serde_json::Value>(json)
-        .map(|v| {
-            v.get(key)
-                .unwrap_or(&serde_json::Value::Null)
-                .as_i64()
-                .unwrap_or(0)
-        })
-        .unwrap_or(0)
+#[derive(Serialize)]
+struct CoverageOutput {
+    coverage: i8,
+}
+
+fn get_json_input(json: &str) -> Result<JsonInput, serde_json::Error> {
+    serde_json::from_str(json)
 }
 
 async fn coverage(json: String) -> String {
-    let code = get_string_json(&json, "code");
-    let timeout: u64 = get_int_json(&json, "timeout") as u64;
+    let input = match get_json_input(&json) {
+        Ok(input) => input,
+        Err(_) => return "-1".to_string(),
+    };
+
     let tempfile = create_temp_file("py").await;
-    tokio::fs::write(&tempfile, code).await.unwrap();
+    tokio::fs::write(&tempfile, &input.code).await.unwrap();
     let cov_file = format!("{}.cov", tempfile);
     let thunk = async {
         let output = run_program_with_timeout(
             "coverage",
             &["run", "--data-file", cov_file.as_str(), tempfile.as_str()],
             &[], // no stdin
-            Duration::from_secs(timeout),
+            Duration::from_secs(input.timeout),
         )
         .await
         .ok()?;
@@ -261,7 +258,7 @@ async fn coverage(json: String) -> String {
             return None;
         }
         let stdout = String::from_utf8(output.stdout).ok()?;
-        let mut cov_percentage: u8 = 0;
+        let mut cov_percentage: i8 = 0;
         let mut next_is_cov = false;
         for line in stdout.lines() {
             if next_is_cov {
@@ -278,40 +275,34 @@ async fn coverage(json: String) -> String {
             }
         }
 
-        Some(cov_percentage.to_string())
+        Some(cov_percentage)
     };
-    let res = thunk.await.unwrap_or("-1".to_string());
+    let res = thunk.await.unwrap_or(-1);
     tokio::fs::remove_file(&tempfile).await.unwrap();
     tokio::fs::remove_file(&cov_file).await.ok(); // the file may not exist
-    res
+    
+    serde_json::to_string(&CoverageOutput { coverage: res }).unwrap_or_else(|_| "-1".to_string())
 }
 
 async fn py_exec(json: String) -> String {
-    use async_compression::tokio::bufread::GzipDecoder;
-    use base64::engine::general_purpose::STANDARD;
-    use tokio::io::BufReader;
+    let input = match get_json_input(&json) {
+        Ok(input) => input,
+        Err(_) => return "1\nInvalid JSON input".to_string(),
+    };
 
-    let base64_decoded = STANDARD.decode(json.as_bytes()).unwrap();
-    let cursor = std::io::Cursor::new(base64_decoded);
-    let mut decoder = GzipDecoder::new(BufReader::new(cursor));
-    let mut decompressed_data = Vec::with_capacity(json.len() * 2); // preallocate with estimated size
-    decoder.read_to_end(&mut decompressed_data).await.unwrap();
-
-    let json = unsafe { String::from_utf8_unchecked(decompressed_data) };
-
-    let code = get_string_json(&json, "code");
-    let timeout: u64 = get_int_json(&json, "timeout") as u64;
-    let stdin = get_string_json(&json, "stdin");
-    let (res, tempfile) = run_py_code(&code, timeout, stdin).await;
+    let (res, tempfile) = run_py_code(&input.code, input.timeout, input.stdin.unwrap_or_default()).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }
 
 async fn any_exec(json: String) -> String {
-    let code = get_string_json(&json, "code");
-    let lang = get_string_json(&json, "lang");
-    let timeout: u64 = get_int_json(&json, "timeout") as u64;
-    let (res, tempfile) = run_multipl_e_prog(&code, &lang, timeout).await;
+    let input = match get_json_input(&json) {
+        Ok(input) => input,
+        Err(_) => return "1\nInvalid JSON input".to_string(),
+    };
+
+    let lang = input.lang.unwrap_or_default();
+    let (res, tempfile) = run_multipl_e_prog(&input.code, &lang, input.timeout).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }
