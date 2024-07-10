@@ -1,4 +1,5 @@
 use axum::{extract::DefaultBodyLimit, routing::post, Router};
+use base64::Engine;
 use lazy_static::lazy_static;
 use nix::unistd::Pid;
 use std::{
@@ -9,8 +10,9 @@ use std::{
     },
     time::Duration,
 };
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
     sync::mpsc::{channel, Receiver, Sender},
     sync::Mutex,
 };
@@ -285,6 +287,17 @@ async fn coverage(json: String) -> String {
 }
 
 async fn py_exec(json: String) -> String {
+    use base64::engine::general_purpose::STANDARD;
+    use async_compression::tokio::bufread::GzipDecoder;
+
+    let base64_decoded = STANDARD.decode(json.as_str()).unwrap();
+    let cursor = std::io::Cursor::new(base64_decoded);
+    let mut decoder = GzipDecoder::new(cursor);
+    let mut decompressed_data = Vec::new();
+    decoder.read_to_end(&mut decompressed_data).await.unwrap();
+    let json = String::from_utf8(decompressed_data)
+        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
+
     let code = get_string_json(&json, "code");
     let timeout: u64 = get_int_json(&json, "timeout") as u64;
     let stdin = get_string_json(&json, "stdin");

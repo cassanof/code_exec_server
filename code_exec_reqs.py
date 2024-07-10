@@ -3,6 +3,8 @@ import time
 import requests
 import json
 import threading
+import gzip
+import base64
 
 
 def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="") -> Tuple[bool, str]:
@@ -20,6 +22,9 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
     code_with_tests = code + "\n\n" + test
     data = json.dumps(
         {"code": code_with_tests, "timeout": timeout, "stdin": stdin})
+    # gzip compress and base64 encode
+    compressed_data = gzip.compress(data.encode('utf-8'))
+    data = base64.b64encode(compressed_data).decode('utf-8')
     while True: # loop for server downtime
         try:
             r = requests.post(
