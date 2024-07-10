@@ -6,10 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-compression = { version = "0.4.11", features = ["gzip", "tokio"] }
 axum = "0.6.18"
-base64 = "0.21.2"
-flate2 = "1.0.30"
 lazy_static = "1.4.0"
 nix = { version = "0.28.0", features = ["user", "resource", "process", "signal"] }
 serde = { version = "1.0.200", features = ["derive"] }

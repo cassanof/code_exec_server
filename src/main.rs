@@ -1,21 +1,14 @@
 use axum::{extract::DefaultBodyLimit, routing::post, Router};
-use base64::Engine;
 use lazy_static::lazy_static;
-use nix::unistd::Pid;
 use std::{
     process::Output,
     sync::{
         atomic::{AtomicUsize, Ordering},
-        Arc,
     },
     time::Duration,
 };
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
-use tokio::{
-    sync::mpsc::{channel, Receiver, Sender},
-    sync::Mutex,
-};
 
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -280,7 +273,7 @@ async fn coverage(json: String) -> String {
     let res = thunk.await.unwrap_or(-1);
     tokio::fs::remove_file(&tempfile).await.unwrap();
     tokio::fs::remove_file(&cov_file).await.ok(); // the file may not exist
-    
+
     serde_json::to_string(&CoverageOutput { coverage: res }).unwrap_or_else(|_| "-1".to_string())
 }
 
@@ -290,7 +283,8 @@ async fn py_exec(json: String) -> String {
         Err(_) => return "1\nInvalid JSON input".to_string(),
     };
 
-    let (res, tempfile) = run_py_code(&input.code, input.timeout, input.stdin.unwrap_or_default()).await;
+    let (res, tempfile) =
+        run_py_code(&input.code, input.timeout, input.stdin.unwrap_or_default()).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }
