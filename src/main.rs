@@ -287,16 +287,17 @@ async fn coverage(json: String) -> String {
 }
 
 async fn py_exec(json: String) -> String {
-    use base64::engine::general_purpose::STANDARD;
     use async_compression::tokio::bufread::GzipDecoder;
+    use base64::engine::general_purpose::STANDARD;
+    use tokio::io::BufReader;
 
-    let base64_decoded = STANDARD.decode(json.as_str()).unwrap();
+    let base64_decoded = STANDARD.decode(json.as_bytes()).unwrap();
     let cursor = std::io::Cursor::new(base64_decoded);
-    let mut decoder = GzipDecoder::new(cursor);
-    let mut decompressed_data = Vec::new();
+    let mut decoder = GzipDecoder::new(BufReader::new(cursor));
+    let mut decompressed_data = Vec::with_capacity(json.len() * 2); // preallocate with estimated size
     decoder.read_to_end(&mut decompressed_data).await.unwrap();
-    let json = String::from_utf8(decompressed_data)
-        .unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
+
+    let json = unsafe { String::from_utf8_unchecked(decompressed_data) };
 
     let code = get_string_json(&json, "code");
     let timeout: u64 = get_int_json(&json, "timeout") as u64;
