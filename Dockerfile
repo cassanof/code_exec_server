@@ -16,5 +16,6 @@ WORKDIR /app
 RUN cargo build --release
 
 EXPOSE 8000
+EXPOSE 5005
 
 ENTRYPOINT ["cargo", "run", "--release"]
