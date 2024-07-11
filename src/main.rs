@@ -59,10 +59,20 @@ async fn garbage_collector() {
         drop(pool);
         // kill the pids...
         for pid in to_kill {
-            let _ = nix::sys::signal::kill(
+            // check if the pid is still alive
+            let wpid = nix::sys::wait::waitpid(
                 nix::unistd::Pid::from_raw(pid as i32),
-                nix::sys::signal::SIGKILL,
-            );
+                Some(nix::sys::wait::WaitPidFlag::WNOHANG),
+            )
+            .unwrap_or(nix::sys::wait::WaitStatus::StillAlive);
+            if wpid == nix::sys::wait::WaitStatus::StillAlive {
+                // if it is, kill it
+                nix::sys::signal::kill(
+                    nix::unistd::Pid::from_raw(pid as i32),
+                    nix::sys::signal::Signal::SIGKILL,
+                )
+                .ok();
+            }
         }
     }
 }
