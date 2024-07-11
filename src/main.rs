@@ -34,7 +34,7 @@ lazy_static! {
     // this keeps track of pids and when they started, and the timeout allowed
     static ref PID_POOL: Mutex<Vec<(u32, Instant, Duration)>> = Mutex::new(Vec::new());
     // this is how often the GC checks for pids to kill
-    static ref GC_INTERVAL: Duration = Duration::from_secs(90);
+    static ref GC_INTERVAL: Duration = Duration::from_secs(10);
 }
 
 async fn garbage_collector() {
@@ -63,9 +63,8 @@ async fn garbage_collector() {
             let wpid = nix::sys::wait::waitpid(
                 nix::unistd::Pid::from_raw(pid as i32),
                 Some(nix::sys::wait::WaitPidFlag::WNOHANG),
-            )
-            .unwrap_or(nix::sys::wait::WaitStatus::StillAlive);
-            if wpid == nix::sys::wait::WaitStatus::StillAlive {
+            );
+            if let Ok(nix::sys::wait::WaitStatus::StillAlive) = wpid {
                 // if it is, kill it
                 nix::sys::signal::kill(
                     nix::unistd::Pid::from_raw(pid as i32),
