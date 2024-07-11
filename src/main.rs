@@ -39,7 +39,14 @@ async fn main() {
         .map(|port| port.to_string())
         .unwrap_or_else(|| "8000".to_string());
 
-    let addr = format!("0.0.0.0:{}", port);
+    let ip = args
+        .iter()
+        .position(|arg| arg == "--ip")
+        .and_then(|index| args.get(index + 1))
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "0.0.0.0".to_string());
+
+    let addr = format!("{}:{}", ip, port);
 
     axum::Server::bind(&addr.parse().unwrap())
         .serve(app.into_make_service())
