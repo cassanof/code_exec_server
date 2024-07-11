@@ -3,6 +3,9 @@ import time
 import requests
 import json
 import threading
+import os
+
+DEFAULT_EXECUTOR = os.getenv("EXECUTOR_URL", "http://127.0.0.1:8000")
 
 
 def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="", json_resp=True) -> Tuple[bool, str]:
@@ -16,11 +19,14 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="",
 
     timeout_on_client: If true, the client will timeout after timeout+2 seconds.
     """
+    if server == "http://127.0.0.1:8000":
+        # set to default executor if not provided
+        server = DEFAULT_EXECUTOR
     assert isinstance(timeout, int), "Timeout needs to be an integer"
     code_with_tests = code + "\n\n" + test
     data = json.dumps(
         {"code": code_with_tests, "timeout": timeout, "stdin": stdin, "json_resp": json_resp})
-    while True: # loop for server downtime
+    while True:  # loop for server downtime
         try:
             r = requests.post(
                 server + "/py_exec",
