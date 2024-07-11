@@ -5,7 +5,7 @@ import json
 import threading
 
 
-def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="") -> Tuple[bool, str]:
+def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="", json_resp=True) -> Tuple[bool, str]:
     """
     Executes a test against a code snippet.
     Produces true if the test passes, false otherwise.
@@ -19,7 +19,7 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
     assert isinstance(timeout, int), "Timeout needs to be an integer"
     code_with_tests = code + "\n\n" + test
     data = json.dumps(
-        {"code": code_with_tests, "timeout": timeout, "stdin": stdin})
+        {"code": code_with_tests, "timeout": timeout, "stdin": stdin, "json_resp": json_resp})
     while True: # loop for server downtime
         try:
             r = requests.post(
@@ -27,9 +27,14 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="")
                 data=data,
                 timeout=(timeout + 2) if timeout_on_client else None
             )
-            lines = r.text.split("\n")
-            resp = lines[0]
-            outs = "\n".join(lines[1:])
+            if json_resp:
+                j = r.json()
+                resp = str(j["status"])
+                outs = j["output"]
+            else:
+                lines = r.text.split("\n")
+                resp = lines[0]
+                outs = "\n".join(lines[1:])
             assert resp == "0" or resp == "1"
             return resp == "0", outs
         except Exception as e:

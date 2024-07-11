@@ -1,4 +1,8 @@
-use axum::{extract::DefaultBodyLimit, routing::{get, post}, Router};
+use axum::{
+    extract::DefaultBodyLimit,
+    routing::{get, post},
+    Router,
+};
 use lazy_static::lazy_static;
 use std::{
     process::Output,
@@ -28,7 +32,6 @@ lazy_static! {
         mem / cpus
     };
 }
-
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -163,19 +166,31 @@ async fn run_program_with_timeout(
     }
 }
 
-fn out_to_res(output: ExecResult) -> String {
+fn out_to_res_helper(output: ExecResult) -> (i8, String) {
     match output {
         Ok(o) if o.status.code().unwrap_or(-1) == 0 => {
-            format!("0\n{}", String::from_utf8_lossy(&o.stdout))
+            (0, String::from_utf8_lossy(&o.stdout).to_string())
         }
-        Ok(o) => format!("1\n{}", String::from_utf8_lossy(&o.stderr)),
-        Err(ExecError::Timeout) => "1\nTimeout".to_string(),
-        Err(ExecError::IoError(e)) => format!("1\n{}", e),
-        Err(ExecError::Utf8Error(e)) => format!("1\n{}", e),
+        Ok(o) => (1, String::from_utf8_lossy(&o.stderr).to_string()),
+        Err(ExecError::Timeout) => (1, "Timeout".to_string()),
+        Err(ExecError::IoError(e)) => (1, e.to_string()),
+        Err(ExecError::Utf8Error(e)) => (1, e.to_string()),
     }
 }
 
-async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String) {
+fn out_to_res(output: ExecResult) -> String {
+    let (status, output) = out_to_res_helper(output);
+    format!("{}\n{}", status, output)
+}
+
+fn out_to_res_json(output: ExecResult) -> String {
+    let (status, output) = out_to_res_helper(output);
+    // make it {"status": <status>, "output": <output>}
+    serde_json::to_string(&serde_json::json!({ "status": status, "output": output }))
+        .unwrap_or_else(|_| "-1\nFailed to serialize output".to_string())
+}
+
+async fn run_py_code(code: &str, timeout: u64, stdin: String, json_resp: bool) -> (String, String) {
     let tempfile = create_temp_file("py").await;
     tokio::fs::write(&tempfile, code).await.unwrap();
     let output = run_program_with_timeout(
@@ -189,7 +204,11 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String) -> (String, String
     )
     .await;
 
-    let res = out_to_res(output);
+    let res = if json_resp {
+        out_to_res_json(output)
+    } else {
+        out_to_res(output)
+    };
 
     debug!("{}: {}", tempfile, res);
     (res, tempfile)
@@ -228,6 +247,7 @@ struct JsonInput {
     timeout: u64,
     stdin: Option<String>,
     lang: Option<String>,
+    json_resp: Option<bool>,
 }
 
 #[derive(Serialize)]
@@ -304,8 +324,13 @@ async fn py_exec(json: String) -> String {
         Err(_) => return "1\nInvalid JSON input".to_string(),
     };
 
-    let (res, tempfile) =
-        run_py_code(&input.code, input.timeout, input.stdin.unwrap_or_default()).await;
+    let (res, tempfile) = run_py_code(
+        &input.code,
+        input.timeout,
+        input.stdin.unwrap_or_default(),
+        input.json_resp.unwrap_or(false),
+    )
+    .await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }
