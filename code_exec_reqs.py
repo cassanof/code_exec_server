@@ -6,7 +6,7 @@ import threading
 import os
 
 EXECUTOR_URL = os.getenv("EXECUTOR_URL", None)
-AUTH = os.getenv("EXECUTOR_AUTH", None)
+EXECUTOR_AUTH = os.getenv("EXECUTOR_AUTH", None)
 
 
 def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="", json_resp=True) -> Tuple[bool, str]:
@@ -24,23 +24,28 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="",
         server = EXECUTOR_URL
     assert isinstance(timeout, int), "Timeout needs to be an integer"
     code_with_tests = code + "\n\n" + test
-    d = {"code": code_with_tests, "timeout": timeout, "stdin": stdin}
-    if AUTH:
+    d = {"code": code_with_tests, "timeout": timeout,
+         "stdin": stdin, "json_resp": json_resp}
+    if EXECUTOR_AUTH:
+        assert json_resp, "Auth only works with json responses"
         d = {"args": d}
     data = json.dumps(d)
     while True:  # loop for server downtime
         try:
             headers = {"Content-Type": "application/json"}
-            if AUTH:
-                headers["Authorization"] = AUTH
+            if EXECUTOR_AUTH:
+                headers["Authorization"] = EXECUTOR_AUTH
             r = requests.post(
-                server + "/py_exec" if not AUTH else server,
+                server + "/py_exec" if not EXECUTOR_AUTH else server,
                 data=data,
                 timeout=(timeout + 2) if timeout_on_client else None,
+                headers=headers
             )
             if json_resp:
                 j = r.json()
-                if AUTH:
+                if "detail" in j:
+                    raise Exception(j["detail"])
+                if EXECUTOR_AUTH:
                     assert j["status"] == "SUCCESS", f"Something went wrong: " + \
                         str(j)
                     j = json.loads(j["result"]["result"])

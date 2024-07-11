@@ -21,6 +21,15 @@ print(pass_req)
 fail_req = code_exec_reqs.exec_test("http://127.0.0.1:8000", CODE_FAIL, "")
 print(fail_req)
 
+print("##### Testing large code payload ######")
+
+CODE_PASS_LARGE = (CODE_PASS * 100_000) + "\nprint('done pass large')"
+pass_req = code_exec_reqs.exec_test("http://127.0.0.1:8000", CODE_PASS_LARGE, "")
+print(pass_req)
+
+CODE_FAIL_LARGE = "\nprint('doing fail large')\n" + (CODE_FAIL * 100_000)
+fail_req = code_exec_reqs.exec_test("http://127.0.0.1:8000", CODE_FAIL_LARGE, "")
+print(fail_req)
 
 print("##### Testing stdin capture ######")
 CODE_STDIN = """
