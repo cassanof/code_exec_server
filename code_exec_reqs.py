@@ -5,7 +5,7 @@ import json
 import threading
 import os
 
-DEFAULT_EXECUTOR = os.getenv("EXECUTOR_URL", "http://127.0.0.1:8000")
+EXECUTOR_URL = os.getenv("EXECUTOR_URL", None)
 AUTH = os.getenv("EXECUTOR_AUTH", None)
 
 
@@ -20,9 +20,8 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="",
 
     timeout_on_client: If true, the client will timeout after timeout+2 seconds.
     """
-    if server == "http://127.0.0.1:8000":
-        # set to default executor if not provided
-        server = DEFAULT_EXECUTOR
+    if EXECUTOR_URL is not None:  # override the server
+        server = EXECUTOR_URL
     assert isinstance(timeout, int), "Timeout needs to be an integer"
     code_with_tests = code + "\n\n" + test
     d = {"code": code_with_tests, "timeout": timeout, "stdin": stdin}
@@ -35,7 +34,7 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="",
             if AUTH:
                 headers["Authorization"] = AUTH
             r = requests.post(
-                server + "/py_exec",
+                server + "/py_exec" if not AUTH else server,
                 data=data,
                 timeout=(timeout + 2) if timeout_on_client else None,
             )
