@@ -192,12 +192,16 @@ fn out_to_res_json(output: ExecResult) -> String {
 
 async fn run_py_code(code: &str, timeout: u64, stdin: String, json_resp: bool) -> (String, String) {
     let tempfile = create_temp_file("py").await;
+    let orphan_timeout = timeout + 5; // give it 5 seconds to clean up
     tokio::fs::write(&tempfile, code).await.unwrap();
     let output = run_program_with_timeout(
         "bash",
         &[
             "-c",
-            &format!("ulimit -v {}; python3 {}", *MEMORY_LIMIT, tempfile),
+            &format!(
+                "ulimit -v {}; timeout -k 5 {} python3 {}",
+                *MEMORY_LIMIT, orphan_timeout, tempfile
+            ),
         ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
