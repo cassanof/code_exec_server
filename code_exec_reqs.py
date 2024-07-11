@@ -38,7 +38,8 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="",
             r = requests.post(
                 server + "/py_exec" if not EXECUTOR_AUTH else server,
                 data=data,
-                timeout=(timeout + 2) if timeout_on_client else None,
+                timeout=(
+                    timeout * 2) if timeout_on_client or EXECUTOR_AUTH else None,
                 headers=headers
             )
             if json_resp:
