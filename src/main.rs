@@ -16,8 +16,21 @@ macro_rules! debug {
     };
 }
 
+lazy_static! {
+    static ref FILE_IDX: AtomicUsize = AtomicUsize::new(0);
+    static ref CPUS_AVAILABLE: usize = std::thread::available_parallelism().unwrap().into();
+    static ref CRATE_DIR: String =
+        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
+    // this is total ram / cpu count. this is in kilobytes
+    static ref MEMORY_LIMIT: usize = {
+        let mem = sys_info::mem_info().unwrap().total as usize;
+        let cpus = *CPUS_AVAILABLE;
+        mem / cpus
+    };
+}
 
-#[tokio::main]
+
+#[tokio::main(flavor = "multi_thread")]
 async fn main() {
     debug!(
         "memory limit: {} bytes (GB: {})",
@@ -56,19 +69,6 @@ async fn main() {
 
 async fn health_check() -> &'static str {
     "OK"
-}
-
-lazy_static! {
-    static ref FILE_IDX: AtomicUsize = AtomicUsize::new(0);
-    static ref CPUS_AVAILABLE: usize = std::thread::available_parallelism().unwrap().into();
-    static ref CRATE_DIR: String =
-        std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    // this is total ram / cpu count. this is in kilobytes
-    static ref MEMORY_LIMIT: usize = {
-        let mem = sys_info::mem_info().unwrap().total as usize;
-        let cpus = *CPUS_AVAILABLE;
-        mem / cpus
-    };
 }
 
 async fn create_temp_file(ext: &str) -> String {
