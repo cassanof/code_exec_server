@@ -6,7 +6,7 @@ use axum::{
 use lazy_static::lazy_static;
 use std::{
     process::Output,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     time::Duration,
 };
 use tokio::io::AsyncReadExt;
@@ -31,6 +31,8 @@ lazy_static! {
         let cpus = *CPUS_AVAILABLE;
         mem / cpus
     };
+    // this is a global atomic bool that is set to true if the program should descalate
+    static ref DESCALATE: AtomicBool = AtomicBool::new(false);
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -61,6 +63,11 @@ async fn main() {
         .and_then(|index| args.get(index + 1))
         .map(|ip| ip.to_string())
         .unwrap_or_else(|| "0.0.0.0".to_string());
+
+    let descalate = args.iter().any(|arg| arg == "--descalate");
+    if descalate {
+        DESCALATE.store(true, Ordering::SeqCst);
+    }
 
     let addr = format!("{}:{}", ip, port);
 
@@ -121,9 +128,11 @@ async fn run_program_with_timeout(
             .stdin(std::process::Stdio::piped())
             // NOTE: this is the unsafe bit
             .pre_exec(move || {
-                // restrict gid and uid
-                nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
-                nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
+                if DESCALATE.load(Ordering::SeqCst) {
+                    // restrict gid and uid
+                    nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
+                    nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
+                }
                 Ok(())
             })
             .spawn()?
