@@ -31,8 +31,6 @@ lazy_static! {
         let cpus = *CPUS_AVAILABLE;
         mem / cpus
     };
-    // this is a global atomic bool that is set to true if the program should descalate
-    static ref DESCALATE: AtomicBool = AtomicBool::new(false);
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -63,11 +61,6 @@ async fn main() {
         .and_then(|index| args.get(index + 1))
         .map(|ip| ip.to_string())
         .unwrap_or_else(|| "0.0.0.0".to_string());
-
-    let descalate = args.iter().any(|arg| arg == "--descalate");
-    if descalate {
-        DESCALATE.store(true, Ordering::SeqCst);
-    }
 
     let addr = format!("{}:{}", ip, port);
 
@@ -128,11 +121,9 @@ async fn run_program_with_timeout(
             .stdin(std::process::Stdio::piped())
             // NOTE: this is the unsafe bit
             .pre_exec(move || {
-                if DESCALATE.load(Ordering::SeqCst) {
-                    // restrict gid and uid
-                    nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
-                    nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
-                }
+                // restrict gid and uid
+                nix::unistd::setgid(nix::unistd::Gid::from_raw(1000))?;
+                nix::unistd::setuid(nix::unistd::Uid::from_raw(1000))?;
                 Ok(())
             })
             .spawn()?
@@ -201,15 +192,14 @@ fn out_to_res_json(output: ExecResult) -> String {
 
 async fn run_py_code(code: &str, timeout: u64, stdin: String, json_resp: bool) -> (String, String) {
     let tempfile = create_temp_file("py").await;
-    let orphan_timeout = timeout + 5; // give it 5 seconds to clean up
     tokio::fs::write(&tempfile, code).await.unwrap();
     let output = run_program_with_timeout(
         "bash",
         &[
             "-c",
             &format!(
-                "ulimit -v {}; timeout -k 5 {} python3 {}",
-                *MEMORY_LIMIT, orphan_timeout, tempfile
+                "ulimit -v {}; python3 {}",
+                *MEMORY_LIMIT, tempfile
             ),
         ],
         stdin.as_bytes(),
