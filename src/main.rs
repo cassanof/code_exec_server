@@ -6,11 +6,11 @@ use axum::{
 use lazy_static::lazy_static;
 use std::{
     process::Output,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
-use tokio::io::AsyncReadExt;
-use tokio::io::AsyncWriteExt;
+use tokio::{io::AsyncReadExt, time::Instant};
+use tokio::{io::AsyncWriteExt, sync::Mutex};
 
 macro_rules! debug {
     ($($arg:tt)*) => {
@@ -31,6 +31,40 @@ lazy_static! {
         let cpus = *CPUS_AVAILABLE;
         mem / cpus
     };
+    // this keeps track of pids and when they started, and the timeout allowed
+    static ref PID_POOL: Mutex<Vec<(u32, Instant, Duration)>> = Mutex::new(Vec::new());
+    // this is how often the GC checks for pids to kill
+    static ref GC_INTERVAL: Duration = Duration::from_secs(90);
+}
+
+async fn garbage_collector() {
+    loop {
+        tokio::time::sleep(*GC_INTERVAL).await;
+        let mut pool = PID_POOL.lock().await;
+        let now = Instant::now();
+        // get all pids to kill
+        let to_kill = pool
+            .iter()
+            .filter_map(|(pid, start, timeout)| {
+                if now.duration_since(*start) > *timeout {
+                    Some(*pid)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        // remove them from the pool
+        pool.retain(|(pid, _, _)| !to_kill.contains(pid));
+        // drop the lock
+        drop(pool);
+        // kill the pids...
+        for pid in to_kill {
+            let _ = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(pid as i32),
+                nix::sys::signal::SIGKILL,
+            );
+        }
+    }
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -64,10 +98,12 @@ async fn main() {
 
     let addr = format!("{}:{}", ip, port);
 
+    let gc = tokio::spawn(garbage_collector());
     axum::Server::bind(&addr.parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
+    gc.await.unwrap();
 }
 
 async fn health_check() -> &'static str {
@@ -131,6 +167,10 @@ async fn run_program_with_timeout(
     if !stdin_data.is_empty() {
         let stdin = child.stdin.as_mut().unwrap();
         stdin.write_all(stdin_data).await?;
+    }
+    let pid = child.id();
+    if let Some(pid) = pid {
+        PID_POOL.lock().await.push((pid, Instant::now(), timeout));
     }
     let output = tokio::time::timeout(timeout, child.wait()).await;
     let mut stdout = child
@@ -197,10 +237,7 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String, json_resp: bool) -
         "bash",
         &[
             "-c",
-            &format!(
-                "ulimit -v {}; python3 {}",
-                *MEMORY_LIMIT, tempfile
-            ),
+            &format!("ulimit -v {}; python3 {}", *MEMORY_LIMIT, tempfile),
         ],
         stdin.as_bytes(),
         Duration::from_secs(timeout),
