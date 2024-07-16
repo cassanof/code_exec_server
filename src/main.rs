@@ -4,12 +4,14 @@ use axum::{
     Router,
 };
 use lazy_static::lazy_static;
+use parquet::{file::reader::FileReader, record::RowAccessor};
 use std::{
+    collections::HashMap,
     process::Output,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
-use tokio::{io::AsyncReadExt, time::Instant};
+use tokio::{io::AsyncReadExt, sync::RwLock, time::Instant};
 use tokio::{io::AsyncWriteExt, sync::Mutex};
 
 macro_rules! debug {
@@ -35,6 +37,10 @@ lazy_static! {
     static ref PID_POOL: Mutex<Vec<(u32, Instant, Duration)>> = Mutex::new(Vec::new());
     // this is how often the GC checks for pids to kill
     static ref GC_INTERVAL: Duration = Duration::from_secs(10);
+    // this is a map of test bank names to test bank structs
+    static ref TEST_BANKS: Mutex<HashMap<String, TestBank>> = Mutex::new(HashMap::new());
+    // max 1 hour of oldness per test bank
+    static ref MAX_TEST_BANK_OLDNESS: Duration = Duration::from_secs(3600);
 }
 
 async fn garbage_collector() {
@@ -73,6 +79,78 @@ async fn garbage_collector() {
                 .ok();
             }
         }
+
+        // now let's check if any test banks are too old
+        let mut banks = TEST_BANKS.lock().await;
+        let now = Instant::now();
+        let to_remove = banks
+            .iter()
+            .filter_map(|(name, bank)| {
+                if now.duration_since(bank.last_accessed) > *MAX_TEST_BANK_OLDNESS {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        for name in to_remove {
+            banks.remove(&name);
+        }
+    }
+}
+
+async fn get_test_from_banks(repo: String, hash: String) -> Option<String> {
+    let mut banks = TEST_BANKS.lock().await;
+    let bank = banks.entry(repo.clone()).or_insert_with(|| {
+        TestBank::from_hf(repo.clone()).unwrap_or_else(|e| {
+            eprintln!("Failed to get test bank: {}", e);
+            TestBank {
+                repo: repo.clone(),
+                map: HashMap::new(),
+                last_accessed: Instant::now(),
+            }
+        })
+    });
+    bank.get_test(&hash).map(|s| s.to_string())
+}
+
+#[derive(Debug, Clone)]
+pub struct TestBank {
+    pub repo: String,
+    pub map: HashMap<String, String>,
+    pub last_accessed: Instant,
+}
+
+impl TestBank {
+    pub fn from_hf(repo: String) -> Result<Self, Box<dyn std::error::Error>> {
+        let api = hf_hub::api::sync::Api::new()?;
+        let ds = candle_datasets::hub::from_hub(&api, repo.clone())?;
+        let ds = ds.first().ok_or("No train split")?;
+        let rowiter = ds.get_row_iter(None)?;
+        let mut map = HashMap::new();
+        for r in rowiter.into_iter() {
+            let r = r?;
+            let test = r.get_string(0)?.to_owned();
+            let hash = r.get_string(1)?.to_owned();
+            // make sure it's md5
+            assert!(
+                hash.len() == 32,
+                "hash is not 32 chars long, got {} -- needs to be md5",
+                hash.len()
+            );
+            map.insert(hash, test);
+        }
+        let last_accessed = Instant::now();
+        Ok(Self {
+            repo,
+            map,
+            last_accessed,
+        })
+    }
+
+    pub fn get_test(&mut self, hash: &str) -> Option<String> {
+        self.last_accessed = Instant::now();
+        self.map.get(hash).cloned()
     }
 }
 
@@ -239,8 +317,16 @@ fn out_to_res_json(output: ExecResult) -> String {
         .unwrap_or_else(|_| "-1\nFailed to serialize output".to_string())
 }
 
-async fn run_py_code(code: &str, timeout: u64, stdin: String, json_resp: bool) -> (String, String) {
+async fn run_py_code(input: JsonInput) -> (String, String) {
     let tempfile = create_temp_file("py").await;
+    let mut code = input.code;
+    if let Some((testbank, hash)) = input.testhash {
+        let test = get_test_from_banks(testbank, hash).await;
+        if let Some(test) = test {
+            code.push_str("\n\n");
+            code.push_str(&test);
+        }
+    }
     tokio::fs::write(&tempfile, code).await.unwrap();
     let output = run_program_with_timeout(
         "bash",
@@ -248,12 +334,12 @@ async fn run_py_code(code: &str, timeout: u64, stdin: String, json_resp: bool) -
             "-c",
             &format!("ulimit -v {}; python3 {}", *MEMORY_LIMIT, tempfile),
         ],
-        stdin.as_bytes(),
-        Duration::from_secs(timeout),
+        input.stdin.unwrap_or_default().as_bytes(),
+        Duration::from_secs(input.timeout),
     )
     .await;
 
-    let res = if json_resp {
+    let res = if input.json_resp.unwrap_or(false) {
         out_to_res_json(output)
     } else {
         out_to_res(output)
@@ -292,11 +378,19 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 struct JsonInput {
+    /// Code to run
     code: String,
+    /// Timeout in seconds
     timeout: u64,
+    /// Optional stdin. By default, no stdin is provided
     stdin: Option<String>,
+    /// Optional language. By default, it's python
     lang: Option<String>,
+    /// Enable json responses instead of the "<status>\n<output>" format.
+    /// By default the \n format is used -- faster to parse
     json_resp: Option<bool>,
+    /// Optional testbank name that contains the tests and the hash of the test to run. Tests are appended to the code
+    testhash: Option<(String, String)>,
 }
 
 #[derive(Serialize)]
@@ -373,13 +467,7 @@ async fn py_exec(json: String) -> String {
         Err(_) => return "1\nInvalid JSON input".to_string(),
     };
 
-    let (res, tempfile) = run_py_code(
-        &input.code,
-        input.timeout,
-        input.stdin.unwrap_or_default(),
-        input.json_resp.unwrap_or(false),
-    )
-    .await;
+    let (res, tempfile) = run_py_code(input).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
 }
@@ -390,7 +478,10 @@ async fn any_exec(json: String) -> String {
         Err(_) => return "1\nInvalid JSON input".to_string(),
     };
 
-    let lang = input.lang.unwrap_or_default();
+    if input.testhash.is_some() {
+        return "-1\nTesthash is not supported for this endpoint".to_string();
+    }
+    let lang = input.lang.unwrap_or_else(|| "py".to_string());
     let (res, tempfile) = run_multipl_e_prog(&input.code, &lang, input.timeout).await;
     tokio::fs::remove_file(&tempfile).await.unwrap();
     res
