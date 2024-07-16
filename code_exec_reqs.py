@@ -1,4 +1,5 @@
 from typing import List, Optional, Tuple
+import hashlib
 import time
 import requests
 import json
@@ -9,7 +10,16 @@ EXECUTOR_URL = os.getenv("EXECUTOR_URL", None)
 EXECUTOR_AUTH = os.getenv("EXECUTOR_AUTH", None)
 
 
-def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="", json_resp=True) -> Tuple[bool, str]:
+def exec_test(
+        server: str,
+        code: str,
+        test: str,
+        timeout: int = 30,
+        timeout_on_client: bool = False,
+        stdin: str = "",
+        json_resp: bool = True,
+        testhash_repo: Optional[str] = None,
+) -> Tuple[bool, str]:
     """
     Executes a test against a code snippet.
     Produces true if the test passes, false otherwise.
@@ -18,14 +28,26 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="",
     You can set test to an empty string if you want to execute the code without any tests
     and just check if it runs without errors.
 
-    timeout_on_client: If true, the client will timeout after timeout+2 seconds.
+    timeout_on_client: If true, the client will timeout after timeout*2 seconds.
+    If false, the server will timeout after timeout seconds.
+
+    json_resp: If true, the response will be in json format.
+    If false, the response will be in plain text ("<status>\n<output>") format.
+
+    testhash_repo: If provided, the server will use the testhash to cache the tests server-side.
     """
     if EXECUTOR_URL is not None:  # override the server
         server = EXECUTOR_URL
     assert isinstance(timeout, int), "Timeout needs to be an integer"
-    code_with_tests = code + "\n\n" + test
-    d = {"code": code_with_tests, "timeout": timeout,
-         "stdin": stdin, "json_resp": json_resp}
+    if testhash_repo is not None:
+        test_md5 = hashlib.md5(test.encode()).hexdigest()
+        testhash = (testhash_repo, test_md5)
+    else:
+        code += "\n\n" + test
+        testhash = None
+
+    d = {"code": code, "timeout": timeout, "stdin": stdin,
+         "json_resp": json_resp, "testhash": testhash}
     if EXECUTOR_AUTH:
         assert json_resp, "Auth only works with json responses"
         d = {"args": d}
