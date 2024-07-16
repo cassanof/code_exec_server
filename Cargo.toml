@@ -13,3 +13,6 @@ serde = { version = "1.0.200", features = ["derive"] }
 serde_json = "1.0.116"
 sys-info = "0.9.1"
 tokio = { version = "1.29.1", features = ["full"] }
+candle-datasets = "0.4.1"
+hf-hub = "0.3.2"
+parquet = "50.0.0"

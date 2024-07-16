@@ -63,7 +63,7 @@ def exec_test(server, code, test, timeout=30, timeout_on_client=False, stdin="",
             # check if the server is alive
             if not check_executor_alive(server):
                 # wait for the server to come back up
-                print("Server is down, waiting for it to come back up...")
+                print("Request rejected, waiting 3 seconds and then retrying...")
                 time.sleep(3)
                 continue
             else:
