@@ -473,7 +473,7 @@ async fn py_exec(json: String) -> String {
     };
 
     let (res, tempfile) = run_py_code(input).await;
-    tokio::fs::remove_file(&tempfile).await.unwrap();
+    tokio::fs::remove_file(&tempfile).await.ok();
     res
 }
 
