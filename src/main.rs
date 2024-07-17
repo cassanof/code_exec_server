@@ -325,6 +325,11 @@ async fn run_py_code(input: JsonInput) -> (String, String) {
         if let Some(test) = test {
             code.push_str("\n\n");
             code.push_str(&test);
+        } else {
+            return (
+                "-1\nFailed to get test from test bank".to_string(),
+                tempfile,
+            );
         }
     }
     tokio::fs::write(&tempfile, code).await.unwrap();
